@@ -448,6 +448,10 @@ static int e1000_desc_unused(struct e1000_ring *ring)
 	return ring->count + ring->next_to_clean - ring->next_to_use - 1;
 }
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <if_e1000e_netmap.h>
+#endif
+
 /**
  * e1000_receive_skb - helper function to handle Rx indications
  * @adapter: board private structure
@@ -777,6 +781,10 @@ static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 	bool cleaned = 0;
 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
 
+#ifdef DEV_NETMAP
+	if (netmap_rx_irq(netdev, 0, work_done))
+		return 1; /* seems to be ignored */
+#endif /* DEV_NETMAP */
 	i = rx_ring->next_to_clean;
 	rx_desc = E1000_RX_DESC(*rx_ring, i);
 	buffer_info = &rx_ring->buffer_info[i];
@@ -995,6 +1003,10 @@ static bool e1000_clean_tx_irq(struct e1000_adapter *adapter)
 	unsigned int count = 0;
 	unsigned int total_tx_bytes = 0, total_tx_packets = 0;
 
+#ifdef DEV_NETMAP
+	if (netmap_tx_irq(netdev, 0))
+		return 1; /* cleaned ok */
+#endif /* DEV_NETMAP */
 	i = tx_ring->next_to_clean;
 	eop = tx_ring->buffer_info[i].next_to_watch;
 	eop_desc = E1000_TX_DESC(*tx_ring, eop);
@@ -3091,6 +3103,10 @@ static void e1000_configure(struct e1000_adapter *adapter)
 	e1000_configure_tx(adapter);
 	e1000_setup_rctl(adapter);
 	e1000_configure_rx(adapter);
+#ifdef DEV_NETMAP
+	if (e1000e_netmap_init_buffers(adapter))
+		return;
+#endif /* DEV_NETMAP */
 	adapter->alloc_rx_buf(adapter, e1000_desc_unused(adapter->rx_ring));
 }
 
@@ -6015,6 +6031,9 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_register;
 
+#ifdef DEV_NETMAP
+	e1000_netmap_attach(adapter);
+#endif /* DEV_NETMAP */
 	/* carrier off reporting is important to ethtool even BEFORE open */
 	netif_carrier_off(netdev);
 
@@ -6102,6 +6121,10 @@ static void __devexit e1000_remove(struct pci_dev *pdev)
 	e1000e_reset_interrupt_capability(adapter);
 	kfree(adapter->tx_ring);
 	kfree(adapter->rx_ring);
+
+#ifdef DEV_NETMAP
+	netmap_detach(netdev);
+#endif /* DEV_NETMAP */
 
 	iounmap(adapter->hw.hw_addr);
 	if (adapter->hw.flash_address)
