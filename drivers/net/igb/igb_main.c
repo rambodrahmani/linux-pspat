@@ -235,6 +235,10 @@ MODULE_DESCRIPTION("Intel(R) Gigabit Ethernet Network Driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_VERSION);
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <if_igb_netmap.h>
+#endif
+
 /**
  * Scale the NIC clock cycle by a large factor so that
  * relatively small clock corrections can be added or
@@ -1502,6 +1506,10 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	/* carrier off reporting is important to ethtool even BEFORE open */
 	netif_carrier_off(netdev);
 
+#ifdef DEV_NETMAP
+	igb_netmap_attach(adapter);
+#endif /* DEV_NETMAP */
+
 #ifdef CONFIG_IGB_DCA
 	if (dca_add_requester(&pdev->dev) == 0) {
 		adapter->flags |= IGB_FLAG_DCA_ENABLED;
@@ -1640,6 +1648,10 @@ static void __devexit igb_remove(struct pci_dev *pdev)
 		wr32(E1000_DCA_CTRL, E1000_DCA_CTRL_DCA_MODE_DISABLE);
 	}
 #endif
+#ifdef DEV_NETMAP
+	netmap_detach(netdev);
+#endif /* DEV_NETMAP */
+
 
 	/* Release control of h/w to f/w.  If f/w is AMT enabled, this
 	 * would have already happened in close and is redundant. */
@@ -1942,6 +1954,9 @@ static void igb_configure_tx(struct igb_adapter *adapter)
 		txdctl = rd32(E1000_TXDCTL(j));
 		txdctl |= E1000_TXDCTL_QUEUE_ENABLE;
 		wr32(E1000_TXDCTL(j), txdctl);
+#ifdef DEV_NETMAP
+		igb_netmap_configure_tx_ring(adapter, reg_idx);
+#endif /* DEV_NETMAP */
 
 		/* Turn off Relaxed Ordering on head write-backs.  The
 		 * writebacks MUST be delivered in order or it will
@@ -4448,6 +4463,11 @@ static bool igb_clean_tx_irq(struct igb_ring *tx_ring)
 	unsigned int i, eop, count = 0;
 	bool cleaned = false;
 
+#ifdef DEV_NETMAP
+        if (netmap_tx_irq(netdev, tx_ring->queue_index))
+                return 1; /* cleaned ok */
+#endif /* DEV_NETMAP */
+
 	i = tx_ring->next_to_clean;
 	eop = tx_ring->buffer_info[i].next_to_watch;
 	eop_desc = E1000_TX_DESC_ADV(*tx_ring, eop);
@@ -4629,6 +4649,11 @@ static bool igb_clean_rx_irq_adv(struct igb_ring *rx_ring,
 	u32 staterr;
 	u16 length;
 
+#ifdef DEV_NETMAP
+	if (netmap_rx_irq(netdev, rx_ring->queue_index, work_done))
+		return 1;
+#endif /* DEV_NETMAP */
+
 	i = rx_ring->next_to_clean;
 	buffer_info = &rx_ring->buffer_info[i];
 	rx_desc = E1000_RX_DESC_ADV(*rx_ring, i);
@@ -4804,6 +4829,10 @@ static void igb_alloc_rx_buffers_adv(struct igb_ring *rx_ring,
 	unsigned int i;
 	int bufsz;
 
+#ifdef DEV_NETMAP
+	if (igb_netmap_configure_rx_ring(rx_ring))
+                return;
+#endif /* DEV_NETMAP */
 	i = rx_ring->next_to_use;
 	buffer_info = &rx_ring->buffer_info[i];
 
