@@ -1962,12 +1962,25 @@ static void nv_init_tx(struct net_device *dev)
 	}
 }
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+/* we need a few forward declarations */
+static void nv_drain_rxtx(struct net_device *dev);
+static int nv_init_ring(struct net_device *dev);
+#include <forcedeth_netmap.h>
+#endif
+
 static int nv_init_ring(struct net_device *dev)
 {
 	struct fe_priv *np = netdev_priv(dev);
 
 	nv_init_tx(dev);
 	nv_init_rx(dev);
+#ifdef DEV_NETMAP
+	forcedeth_netmap_tx_init(np);
+	if (forcedeth_netmap_rx_init(np))
+		return 0; /* success */
+#endif /* DEV_NETMAP */
+
 
 	if (!nv_optimized(np))
 		return nv_alloc_rx(dev);
@@ -3660,6 +3673,11 @@ static irqreturn_t nv_nic_irq_tx(int foo, void *data)
 	int i;
 	unsigned long flags;
 
+#ifdef DEV_NETMAP
+	if (netmap_tx_irq(dev, 0))
+		return IRQ_HANDLED;
+#endif /* DEV_NETMAP */
+
 	for (i = 0;; i++) {
 		events = readl(base + NvRegMSIXIrqStatus) & NVREG_IRQ_TX_ALL;
 		writel(events, base + NvRegMSIXIrqStatus);
@@ -3771,6 +3789,11 @@ static irqreturn_t nv_nic_irq_rx(int foo, void *data)
 	u32 events;
 	int i;
 	unsigned long flags;
+
+#ifdef DEV_NETMAP
+	if (netmap_rx_irq(dev, 0, &i))
+		return IRQ_HANDLED;
+#endif /* DEV_NETMAP */
 
 	for (i = 0;; i++) {
 		events = readl(base + NvRegMSIXIrqStatus) & NVREG_IRQ_RX_ALL;
@@ -5988,6 +6011,10 @@ static int nv_probe(struct pci_dev *pci_dev, const struct pci_device_id *id)
 		goto out_error;
 	}
 
+#ifdef DEV_NETMAP
+	forcedeth_netmap_attach(np);
+#endif /* DEV_NETMAP */
+
 	netif_carrier_off(dev);
 
 	/* Some NICs freeze when TX pause is enabled while NIC is
@@ -6083,6 +6110,10 @@ static void nv_remove(struct pci_dev *pci_dev)
 	struct net_device *dev = pci_get_drvdata(pci_dev);
 
 	unregister_netdev(dev);
+
+#ifdef DEV_NETMAP
+	netmap_detach(dev);
+#endif /* DEV_NETMAP */
 
 	nv_restore_mac_addr(pci_dev);
 
