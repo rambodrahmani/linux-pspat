@@ -30,6 +30,9 @@
 #include "bnx2x_sp.h"
 
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <bnx2x_netmap_linux.h>	/* extern stuff */
+#endif /* CONFIG_NETMAP */
 
 /**
  * bnx2x_bz_fp - zero content of the fastpath structure.
@@ -1908,6 +1911,9 @@ int bnx2x_nic_load(struct bnx2x *bp, int load_mode)
 
 	/* Start fast path */
 
+#ifdef DEV_NETMAP
+	bnx2x_netmap_config(bp);
+#endif /* DEV_NETMAP */
 	/* Initialize Rx filter. */
 	netif_addr_lock_bh(bp->dev);
 	bnx2x_set_rx_mode(bp->dev);
@@ -2177,6 +2183,50 @@ int bnx2x_poll(struct napi_struct *napi, int budget)
 						 napi);
 	struct bnx2x *bp = fp->bp;
 
+#ifdef DEV_NETMAP
+	/* fake no work if we are in netmap mode */
+	struct netmap_adapter *na = NA(fp->bp->dev);
+	if (!(na && na->ifp->if_capenable & IFCAP_NETMAP))
+		goto normal_path;
+
+	/* grab tx interrupts (we only care for cos 0 */
+	netmap_tx_irq(bp->dev, fp->txdata[0].txq_index);
+
+#if 0
+	/* XXX receive logic */
+	if (0 && netmap_rx_irq(bp->dev, fp->index, &rx_pkt))
+		return true; /* no more interrupts */
+#endif /* 0 */
+
+	/* temporarily duplicate the rx logic, see below */
+	ND(5, "q[%d] rx intr start", fp->index);
+	while (1) {
+		if (bnx2x_has_rx_work(fp)) {
+			work_done += bnx2x_rx_int(fp, budget - work_done);
+			/* must not complete if we consumed full budget */
+			if (work_done >= budget)
+				break;
+		}
+		/* Fall out from the NAPI loop if needed */
+		if (!(bnx2x_has_rx_work(fp))) {
+			bnx2x_update_fpsb_idx(fp);
+			rmb();
+			if (!(bnx2x_has_rx_work(fp))) {
+				napi_complete(napi);
+				/* Re-enable interrupts */
+				bnx2x_ack_sb(bp, fp->igu_sb_id, USTORM_ID,
+					     le16_to_cpu(fp->fp_hc_idx),
+					     IGU_INT_ENABLE, 1);
+				break;
+			}
+		}
+	}
+	ND(5, "q[%d] rx intr done", fp->index);
+
+	return work_done;
+
+normal_path:
+#endif /* DEV_NETMAP */
 	while (1) {
 #ifdef BNX2X_STOP_ON_ERROR
 		if (unlikely(bp->panic)) {
