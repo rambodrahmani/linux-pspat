@@ -583,6 +583,22 @@ static u64 bnx2x_wb_rd(struct bnx2x *bp, int reg)
 }
 #endif
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+/*
+ * This driver uses multiple source files. The netmap header is included
+ * in all (2) files where we need netmap hooks, while new functions are
+ * compiled only in the file with #define NETMAP_BNX2X_MAIN.
+ *
+ * NETMAP Intercept points:
+ * - netmap_attach() is in bnx2x_init_one() (this file).
+ * - netmap_[tr]x_irq() attach into bnx2x_tx_int() and bnx2x_rx_int()
+ * - ring (re)init is globally done in bnx2x_nic_load()
+ * both in bnx2x_cmn.c
+ */
+#define NETMAP_BNX2X_MAIN
+#include <bnx2x_netmap_linux.h>
+#endif /* CONFIG_NETMAP */
+
 static int bnx2x_mc_assert(struct bnx2x *bp)
 {
 	char last_idx;
@@ -11463,6 +11479,9 @@ static int __devinit bnx2x_init_one(struct pci_dev *pdev,
 		    "5GHz (Gen2)" : "2.5GHz",
 		    dev->base_addr, bp->pdev->irq, dev->dev_addr);
 
+#ifdef DEV_NETMAP
+	bnx2x_netmap_attach(bp);
+#endif /* DEV_NETMAP */
 	return 0;
 
 init_one_exit:
