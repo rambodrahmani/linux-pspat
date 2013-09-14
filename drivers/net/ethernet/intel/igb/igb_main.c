@@ -246,6 +246,10 @@ static int debug = -1;
 module_param(debug, int, 0);
 MODULE_PARM_DESC(debug, "Debug level (0=none,...,16=all)");
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <if_igb_netmap.h>
+#endif
+
 struct igb_reg_info {
 	u32 ofs;
 	char *name;
@@ -2132,6 +2136,10 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	/* carrier off reporting is important to ethtool even BEFORE open */
 	netif_carrier_off(netdev);
 
+#ifdef DEV_NETMAP
+	igb_netmap_attach(adapter);
+#endif /* DEV_NETMAP */
+
 #ifdef CONFIG_IGB_DCA
 	if (dca_add_requester(&pdev->dev) == 0) {
 		adapter->flags |= IGB_FLAG_DCA_ENABLED;
@@ -2270,6 +2278,10 @@ static void __devexit igb_remove(struct pci_dev *pdev)
 		dev_info(&pdev->dev, "IOV Disabled\n");
 	}
 #endif
+#ifdef DEV_NETMAP
+	netmap_detach(netdev);
+#endif /* DEV_NETMAP */
+
 
 	iounmap(hw->hw_addr);
 	if (hw->flash_address)
@@ -2744,6 +2756,9 @@ void igb_configure_tx_ring(struct igb_adapter *adapter,
 
 	txdctl |= E1000_TXDCTL_QUEUE_ENABLE;
 	wr32(E1000_TXDCTL(reg_idx), txdctl);
+#ifdef DEV_NETMAP
+	igb_netmap_configure_tx_ring(adapter, reg_idx);
+#endif /* DEV_NETMAP */
 }
 
 /**
@@ -3119,6 +3134,19 @@ void igb_configure_rx_ring(struct igb_adapter *adapter,
 	/* Only set Drop Enable if we are supporting multiple queues */
 	if (adapter->vfs_allocated_count || adapter->num_rx_queues > 1)
 		srrctl |= E1000_SRRCTL_DROP_EN;
+#ifdef DEV_NETMAP
+	{
+		/* The driver uses split buffers, which are not
+		 * supported in netmap mode */
+		struct ifnet *ifp = adapter->netdev;
+		struct netmap_adapter *na = NA(ifp);
+		if (na && ifp->if_capenable & IFCAP_NETMAP) {
+			srrctl &= ~(7 << 25); /* clear descriptor type */
+			srrctl |= E1000_SRRCTL_DESCTYPE_ADV_ONEBUF;
+			/* XXX we should set tail here */
+		}
+	}
+#endif
 
 	wr32(E1000_SRRCTL(reg_idx), srrctl);
 
@@ -5689,6 +5717,10 @@ static bool igb_clean_tx_irq(struct igb_q_vector *q_vector)
 
 	if (test_bit(__IGB_DOWN, &adapter->state))
 		return true;
+#ifdef DEV_NETMAP
+        if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index))
+                return 1; /* cleaned ok */
+#endif /* DEV_NETMAP */
 
 	tx_buffer = &tx_ring->tx_buffer_info[i];
 	tx_desc = IGB_TX_DESC(tx_ring, i);
@@ -5927,6 +5959,12 @@ static bool igb_clean_rx_irq(struct igb_q_vector *q_vector, int budget)
 	u16 cleaned_count = igb_desc_unused(rx_ring);
 	u16 i = rx_ring->next_to_clean;
 
+#ifdef DEV_NETMAP
+	int dummy = 1; // select rx irq handling
+	if (netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &dummy))
+		return 1;
+#endif /* DEV_NETMAP */
+
 	rx_desc = IGB_RX_DESC(rx_ring, i);
 
 	while (igb_test_staterr(rx_desc, E1000_RXD_STAT_DD)) {
@@ -6119,6 +6157,11 @@ void igb_alloc_rx_buffers(struct igb_ring *rx_ring, u16 cleaned_count)
 	union e1000_adv_rx_desc *rx_desc;
 	struct igb_rx_buffer *bi;
 	u16 i = rx_ring->next_to_use;
+
+#ifdef DEV_NETMAP
+	if (igb_netmap_configure_rx_ring(rx_ring))
+                return;
+#endif /* DEV_NETMAP */
 
 	rx_desc = IGB_RX_DESC(rx_ring, i);
 	bi = &rx_ring->rx_buffer_info[i];
