@@ -732,6 +732,10 @@ static void rtl8169_down(struct net_device *dev);
 static void rtl8169_rx_clear(struct rtl8169_private *tp);
 static int rtl8169_poll(struct napi_struct *napi, int budget);
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <if_re_netmap_linux.h>
+#endif
+
 static u32 ocp_read(struct rtl8169_private *tp, u8 mask, u16 reg)
 {
 	void __iomem *ioaddr = tp->mmio_addr;
@@ -3837,6 +3841,10 @@ rtl8169_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (pci_dev_run_wake(pdev))
 		pm_runtime_put_noidle(&pdev->dev);
 
+#ifdef DEV_NETMAP
+	re_netmap_attach(tp);
+#endif /* DEV_NETMAP */
+
 	netif_carrier_off(dev);
 
 out:
@@ -3871,6 +3879,9 @@ static void __devexit rtl8169_remove_one(struct pci_dev *pdev)
 	unregister_netdev(dev);
 
 	rtl_release_firmware(tp);
+#ifdef DEV_NETMAP
+	netmap_detach(dev);
+#endif /* DEV_NETMAP */
 
 	if (pci_dev_run_wake(pdev))
 		pm_runtime_get_noresume(&pdev->dev);
@@ -4873,6 +4884,11 @@ static inline void rtl8169_mark_as_last_descriptor(struct RxDesc *desc)
 static int rtl8169_rx_fill(struct rtl8169_private *tp)
 {
 	unsigned int i;
+#ifdef DEV_NETMAP
+	re_netmap_tx_init(tp);
+	if (re_netmap_rx_init(tp))
+		return 0; // success
+#endif /* DEV_NETMAP */
 
 	for (i = 0; i < NUM_RX_DESC; i++) {
 		void *data;
@@ -5251,6 +5267,11 @@ static void rtl8169_tx_interrupt(struct net_device *dev,
 {
 	unsigned int dirty_tx, tx_left;
 
+#ifdef DEV_NETMAP
+	if (netmap_tx_irq(dev, 0))
+		return;
+#endif /* DEV_NETMAP */
+
 	dirty_tx = tp->dirty_tx;
 	smp_rmb();
 	tx_left = tp->cur_tx - dirty_tx;
@@ -5337,6 +5358,11 @@ static int rtl8169_rx_interrupt(struct net_device *dev,
 {
 	unsigned int cur_rx, rx_left;
 	unsigned int count;
+
+#ifdef DEV_NETMAP
+	if (netmap_rx_irq(dev, 0, &count))
+   		return count;
+#endif /* DEV_NETMAP */
 
 	cur_rx = tp->cur_rx;
 	rx_left = NUM_RX_DESC + tp->dirty_rx - cur_rx;
