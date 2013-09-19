@@ -5286,9 +5286,6 @@ static int ixgbe_open(struct net_device *netdev)
 		goto err_up;
 
 	netif_tx_start_all_queues(netdev);
-#ifdef DEV_NETMAP
-	ixgbe_netmap_attach(adapter);
-#endif /* DEV_NETMAP */
 
 	return 0;
 
@@ -7091,6 +7088,11 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 
 	e_dev_info("Intel(R) 10 Gigabit Network Connection\n");
 	cards_found++;
+
+#ifdef DEV_NETMAP
+	ixgbe_netmap_attach(adapter);
+#endif /* DEV_NETMAP */
+
 	return 0;
 
 err_register:
