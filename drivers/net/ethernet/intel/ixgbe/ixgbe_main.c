@@ -5394,9 +5394,6 @@ static int ixgbe_open(struct net_device *netdev)
 		goto err_req_irq;
 
 	ixgbe_up_complete(adapter);
-#ifdef DEV_NETMAP
-	ixgbe_netmap_attach(adapter);
-#endif /* DEV_NETMAP */
 
 	return 0;
 
@@ -7776,6 +7773,11 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 
 	e_dev_info("%s\n", ixgbe_default_device_descr);
 	cards_found++;
+
+#ifdef DEV_NETMAP
+	ixgbe_netmap_attach(adapter);
+#endif /* DEV_NETMAP */
+
 	return 0;
 
 err_register:
