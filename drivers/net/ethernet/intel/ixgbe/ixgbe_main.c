@@ -4986,9 +4986,6 @@ static int ixgbe_open(struct net_device *netdev)
 
 	ixgbe_up_complete(adapter);
 
-#ifdef DEV_NETMAP
-	ixgbe_netmap_attach(adapter);
-#endif /* DEV_NETMAP */
 
 	return 0;
 
@@ -7610,6 +7607,10 @@ static int ixgbe_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 #ifdef CONFIG_DEBUG_FS
 	ixgbe_dbg_adapter_init(adapter);
 #endif /* CONFIG_DEBUG_FS */
+
+#ifdef DEV_NETMAP
+	ixgbe_netmap_attach(adapter);
+#endif /* DEV_NETMAP */
 
 	return 0;
 
