@@ -6828,10 +6828,6 @@ int ixgbe_open(struct net_device *netdev)
 	ixgbe_clear_udp_tunnel_port(adapter, IXGBE_VXLANCTRL_ALL_UDPPORT_MASK);
 	udp_tunnel_get_rx_info(netdev);
 
-#ifdef DEV_NETMAP
-	ixgbe_netmap_attach(adapter);
-#endif /* DEV_NETMAP */
-
 	return 0;
 
 err_set_queues:
@@ -11202,6 +11198,10 @@ skip_sriov:
 			true);
 
 	ixgbe_mii_bus_init(hw);
+
+#ifdef DEV_NETMAP
+	ixgbe_netmap_attach(adapter);
+#endif /* DEV_NETMAP */
 
 	return 0;
 
