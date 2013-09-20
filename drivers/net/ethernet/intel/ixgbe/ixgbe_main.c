@@ -7554,6 +7554,10 @@ static void __devexit ixgbe_remove(struct pci_dev *pdev)
 	struct ixgbe_adapter *adapter = pci_get_drvdata(pdev);
 	struct net_device *netdev = adapter->netdev;
 
+#ifdef DEV_NETMAP
+	netmap_detach(netdev);
+#endif /* DEV_NETMAP */
+
 #ifdef CONFIG_DEBUG_FS
 	ixgbe_dbg_adapter_exit(adapter);
 #endif /*CONFIG_DEBUG_FS */
