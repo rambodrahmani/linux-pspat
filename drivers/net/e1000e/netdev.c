@@ -2908,6 +2908,10 @@ void e1000e_down(struct e1000_adapter *adapter)
 
 	netif_stop_queue(netdev);
 
+#ifdef DEV_NETMAP
+	netmap_disable_all_rings(netdev);
+#endif
+
 	/* disable transmits in the hardware */
 	tctl = er32(TCTL);
 	tctl &= ~E1000_TCTL_EN;
@@ -3189,6 +3193,10 @@ static int e1000_open(struct net_device *netdev)
 	e1000_irq_enable(adapter);
 
 	netif_start_queue(netdev);
+
+#ifdef DEV_NETMAP
+	netmap_enable_all_rings(netdev);
+#endif /* DEV_NETMAP */
 
 	/* fire a link status change interrupt to start the watchdog */
 	ew32(ICS, E1000_ICS_LSC);
