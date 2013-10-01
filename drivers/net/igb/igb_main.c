@@ -1168,6 +1168,10 @@ int igb_up(struct igb_adapter *adapter)
 
 	netif_tx_start_all_queues(adapter->netdev);
 
+#ifdef DEV_NETMAP
+	netmap_enable_all_rings(adapter->netdev);
+#endif /* DEV_NETMAP */
+
 	/* start the watchdog. */
 	hw->mac.get_link_status = 1;
 	schedule_work(&adapter->watchdog_task);
@@ -1190,6 +1194,10 @@ void igb_down(struct igb_adapter *adapter)
 	rctl = rd32(E1000_RCTL);
 	wr32(E1000_RCTL, rctl & ~E1000_RCTL_EN);
 	/* flush and sleep below */
+
+#ifdef DEV_NETMAP
+	netmap_disable_all_rings(netdev);
+#endif /* DEV_NETMAP */
 
 	netif_tx_stop_all_queues(netdev);
 
