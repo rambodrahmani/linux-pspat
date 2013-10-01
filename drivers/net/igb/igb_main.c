@@ -2052,6 +2052,10 @@ static int igb_open(struct net_device *netdev)
 
 	netif_tx_start_all_queues(netdev);
 
+#ifdef DEV_NETMAP
+	netmap_enable_all_rings(netdev);
+#endif /* DEV_NETMAP */
+
 	/* start the watchdog. */
 	hw->mac.get_link_status = 1;
 	schedule_work(&adapter->watchdog_task);
