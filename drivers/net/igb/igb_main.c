@@ -1813,6 +1813,10 @@ static int igb_open(struct net_device *netdev)
 	/* Fire a link status change interrupt to start the watchdog. */
 	wr32(E1000_ICS, E1000_ICS_LSC);
 
+#ifdef DEV_NETMAP
+	netmap_enable_all_rings(netdev);
+#endif /* DEV_NETMAP */
+
 	return 0;
 
 err_req_irq:
