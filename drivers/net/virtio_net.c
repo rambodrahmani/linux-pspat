@@ -240,6 +240,10 @@ struct virtnet_info {
 	struct failover *failover;
 };
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <virtio_netmap.h>
+#endif
+
 struct padded_vnet_hdr {
 	struct virtio_net_hdr_mrg_rxbuf hdr;
 	/*
@@ -335,6 +339,11 @@ static void skb_xmit_done(struct virtqueue *vq)
 
 	/* Suppress further interrupts. */
 	virtqueue_disable_cb(vq);
+
+#ifdef DEV_NETMAP
+        if (netmap_tx_irq(vi->dev, 0))
+		return;
+#endif
 
 	if (napi->weight)
 		virtqueue_napi_schedule(napi, vq);
@@ -1290,6 +1299,17 @@ static int virtnet_receive(struct receive_queue *rq, int budget,
 	void *buf;
 	int i;
 
+#ifdef DEV_NETMAP
+        int work_done = 0;
+
+        if (netmap_rx_irq(vi->dev, 0, &work_done)) {
+		napi_complete(napi);
+		ND("called netmap_rx_irq");
+
+                return 1;
+        }
+#endif
+
 	if (!vi->big_packets || vi->mergeable_rx_bufs) {
 		void *ctx;
 
@@ -1407,6 +1427,16 @@ static int virtnet_open(struct net_device *dev)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
 	int i, err;
+#ifdef DEV_NETMAP
+        int ok = virtio_netmap_init_buffers(vi);
+
+        netmap_enable_all_rings(dev);
+        if (ok) {
+            for (i = 0; i < vi->max_queue_pairs; i++)
+		virtnet_napi_enable(&vi->rq[i]);
+            return 0;
+        }
+#endif
 
 	for (i = 0; i < vi->max_queue_pairs; i++) {
 		if (i < vi->curr_queue_pairs)
@@ -1749,6 +1779,9 @@ static int virtnet_close(struct net_device *dev)
 	struct virtnet_info *vi = netdev_priv(dev);
 	int i;
 
+#ifdef DEV_NETMAP
+        netmap_disable_all_rings(dev);
+#endif
 	/* Make sure refill_work doesn't re-enable napi! */
 	cancel_delayed_work_sync(&vi->refill);
 
@@ -3016,6 +3049,10 @@ static int virtnet_probe(struct virtio_device *vdev)
 
 	virtnet_set_queues(vi, vi->curr_queue_pairs);
 
+#ifdef DEV_NETMAP
+        virtio_netmap_attach(vi);
+#endif
+
 	/* Assume link up if device can't report link status,
 	   otherwise get link status from config. */
 	netif_carrier_off(dev);
@@ -3069,6 +3106,9 @@ static void virtnet_remove(struct virtio_device *vdev)
 {
 	struct virtnet_info *vi = vdev->priv;
 
+#ifdef DEV_NETMAP
+        netmap_detach(vi->dev);
+#endif
 	virtnet_cpu_notif_remove(vi);
 
 	/* Make sure no work handler is accessing the device. */
