@@ -67,6 +67,10 @@ struct virtnet_info
 	struct page *pages;
 };
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <virtio_netmap.h>
+#endif
+
 struct skb_vnet_hdr {
 	union {
 		struct virtio_net_hdr hdr;
@@ -114,6 +118,10 @@ static void skb_xmit_done(struct virtqueue *svq)
 	/* Suppress further interrupts. */
 	svq->vq_ops->disable_cb(svq);
 
+#ifdef DEV_NETMAP
+	if (netmap_tx_irq(vi->dev, 0))
+		return;
+#endif
 	/* We were probably waiting for more output buffers. */
 	netif_wake_queue(vi->dev);
 }
@@ -409,7 +417,16 @@ static int virtnet_poll(struct napi_struct *napi, int budget)
 	struct virtnet_info *vi = container_of(napi, struct virtnet_info, napi);
 	struct sk_buff *skb = NULL;
 	unsigned int len, received = 0;
+#ifdef DEV_NETMAP
+	int work_done = 0;
 
+	if (netmap_rx_irq(vi->dev, 0, &work_done)) {
+		napi_complete(napi);
+		ND("called netmap_rx_irq");
+
+		return 1;
+	}
+#endif
 again:
 	while (received < budget &&
 	       (skb = vi->rvq->vq_ops->get_buf(vi->rvq, &len)) != NULL) {
@@ -588,6 +605,10 @@ static int virtnet_open(struct net_device *dev)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
 
+#ifdef DEV_NETMAP
+	virtio_netmap_init_buffers(vi);
+	netmap_enable_all_rings(dev);
+#endif
 	napi_enable(&vi->napi);
 
 	/* If all buffers were filled by other side before we napi_enabled, we
@@ -650,6 +671,9 @@ static int virtnet_close(struct net_device *dev)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
 
+#ifdef DEV_NETMAP
+	netmap_disable_all_rings(dev);
+#endif
 	napi_disable(&vi->napi);
 
 	return 0;
@@ -934,6 +958,10 @@ static int virtnet_probe(struct virtio_device *vdev)
 		goto unregister;
 	}
 
+#ifdef DEV_NETMAP
+	virtio_netmap_attach(vi);
+#endif
+
 	vi->status = VIRTIO_NET_S_LINK_UP;
 	virtnet_update_status(vi);
 	netif_carrier_on(dev);
@@ -956,6 +984,9 @@ static void __devexit virtnet_remove(struct virtio_device *vdev)
 	struct virtnet_info *vi = vdev->priv;
 	struct sk_buff *skb;
 
+#ifdef DEV_NETMAP
+	netmap_detach(vi->dev);
+#endif
 	/* Stop all the virtqueues. */
 	vdev->config->reset(vdev);
 
