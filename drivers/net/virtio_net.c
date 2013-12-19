@@ -219,7 +219,7 @@ static void skb_xmit_done(struct virtqueue *vq)
 	virtqueue_disable_cb(vq);
 
 #ifdef DEV_NETMAP
-        if (netmap_tx_irq(vi->dev, 0))
+        if (netmap_tx_irq(vi->dev, vq2txq(vq)))
 		return;
 #endif
 	/* We were probably waiting for more output buffers. */
@@ -742,7 +742,7 @@ static int virtnet_receive(struct receive_queue *rq, int budget)
 #ifdef DEV_NETMAP
         int work_done = 0;
 
-        if (netmap_rx_irq(vi->dev, 0, &work_done)) {
+        if (netmap_rx_irq(vi->dev, vq2rxq(rq->vq), &work_done)) {
 		napi_complete(napi);
 		ND("called netmap_rx_irq");
 
