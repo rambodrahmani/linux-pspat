@@ -4679,6 +4679,16 @@ static void ixgbe_up_complete(struct ixgbe_adapter *adapter)
 	/* enable transmits */
 	netif_tx_start_all_queues(adapter->netdev);
 
+	/* enable any upper devices */
+	netdev_for_each_all_upper_dev_rcu(adapter->netdev, upper, iter) {
+		if (netif_is_macvlan(upper)) {
+			struct macvlan_dev *vlan = netdev_priv(upper);
+
+			if (vlan->fwd_priv)
+				netif_tx_start_all_queues(upper);
+		}
+	}
+
 #ifdef DEV_NETMAP
 	netmap_enable_all_rings(adapter->netdev);
 #endif
