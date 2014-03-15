@@ -15,6 +15,10 @@
  *
  */
 
+#ifdef DEV_NETMAP
+#error "netmap support for this driver is incomplete"
+#endif
+
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/module.h>
