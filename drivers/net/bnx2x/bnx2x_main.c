@@ -15,6 +15,10 @@
  *
  */
 
+#ifdef DEV_NETMAP
+#error "netmap support for this driver is incomplete"
+#endif
+
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/kernel.h>
@@ -11640,4 +11644,3 @@ struct cnic_eth_dev *bnx2x_cnic_probe(struct net_device *dev)
 EXPORT_SYMBOL(bnx2x_cnic_probe);
 
 #endif /* BCM_CNIC */
-
