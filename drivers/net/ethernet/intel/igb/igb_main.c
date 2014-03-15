@@ -3121,7 +3121,7 @@ void igb_configure_rx_ring(struct igb_adapter *adapter,
 		 * supported in netmap mode */
 		struct ifnet *ifp = adapter->netdev;
 		struct netmap_adapter *na = NA(ifp);
-		if (na && ifp->if_capenable & IFCAP_NETMAP) {
+		if (na && na->na_flags & NAF_NETMAP_ON) {
 			srrctl &= ~(7 << 25); /* clear descriptor type */
 			srrctl |= E1000_SRRCTL_DESCTYPE_ADV_ONEBUF;
 			/* XXX we should set tail here */
