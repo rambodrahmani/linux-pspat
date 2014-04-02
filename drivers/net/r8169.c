@@ -4050,7 +4050,7 @@ static void rtl8169_rx_clear(struct rtl8169_private *tp)
 #ifdef DEV_NETMAP
 	re_netmap_tx_init(tp);
 	if (re_netmap_rx_init(tp))
-		return 0; // success
+		return;
 #endif /* DEV_NETMAP */
 
 	for (i = 0; i < NUM_RX_DESC; i++) {
