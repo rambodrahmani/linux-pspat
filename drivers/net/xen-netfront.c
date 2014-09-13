@@ -144,6 +144,10 @@ struct netfront_queue {
 	struct sk_buff *rx_skbs[NET_RX_RING_SIZE];
 	grant_ref_t gref_rx_head;
 	grant_ref_t grant_rx_ref[NET_RX_RING_SIZE];
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+        int netmap_rx_handoff;
+#endif  /* DEV_NETMAP */
+
 };
 
 struct netfront_info {
@@ -161,6 +165,10 @@ struct netfront_info {
 
 	atomic_t rx_gso_checksum_fixup;
 };
+
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <netfront_netmap.h>
+#endif
 
 struct netfront_rx_info {
 	struct xen_netif_rx_response rx;
@@ -286,6 +294,11 @@ static void xennet_alloc_rx_buffers(struct netfront_queue *queue)
 	int notify;
 	int err = 0;
 
+#ifdef DEV_NETMAP
+	if (unlikely(netfront_netmap_alloc_rx_buffers(queue)))
+		return;
+#endif  /* DEV_NETMAP */
+
 	if (unlikely(!netif_carrier_ok(queue->info->netdev)))
 		return;
 
@@ -348,6 +361,20 @@ static int xennet_open(struct net_device *dev)
 	unsigned int num_queues = dev->real_num_tx_queues;
 	unsigned int i = 0;
 	struct netfront_queue *queue = NULL;
+#ifdef DEV_NETMAP
+
+        netmap_enable_all_rings(dev);
+        if (nm_native_on(NA(dev))) {
+                for (i = 0; i < num_queues; ++i) {
+                        queue = &np->queues[i];
+                        napi_enable(&queue->napi);
+                }
+
+                netif_tx_start_all_queues(dev);
+
+                return 0;
+        }
+#endif  /* DEV_NETMAP */
 
 	if (!np->queues)
 		return -ENODEV;
@@ -714,6 +741,9 @@ static int xennet_close(struct net_device *dev)
 	unsigned int num_queues = dev->real_num_tx_queues;
 	unsigned int i;
 	struct netfront_queue *queue;
+#ifdef DEV_NETMAP
+        netmap_disable_all_rings(dev);
+#endif  /* DEV_NETMAP */
 	netif_tx_stop_all_queues(np->netdev);
 	for (i = 0; i < num_queues; ++i) {
 		queue = &np->queues[i];
@@ -1000,6 +1030,11 @@ static int xennet_poll(struct napi_struct *napi, int budget)
 
 	spin_lock(&queue->rx_lock);
 
+#ifdef DEV_NETMAP
+	if (netfront_netmap_poll(napi, &work_done))
+		return work_done;
+#endif  /* DEV_NETMAP */
+
 	skb_queue_head_init(&rxq);
 	skb_queue_head_init(&errq);
 	skb_queue_head_init(&tmpq);
@@ -1223,6 +1258,10 @@ static irqreturn_t xennet_tx_interrupt(int irq, void *dev_id)
 	struct netfront_queue *queue = dev_id;
 	unsigned long flags;
 
+#ifdef DEV_NETMAP
+	if (netmap_tx_irq(queue->info->netdev, queue->id))
+		return IRQ_HANDLED;
+#endif  /* DEV_NETMAP */
 	spin_lock_irqsave(&queue->tx_lock, flags);
 	xennet_tx_buf_gc(queue);
 	spin_unlock_irqrestore(&queue->tx_lock, flags);
@@ -1234,7 +1273,6 @@ static irqreturn_t xennet_rx_interrupt(int irq, void *dev_id)
 {
 	struct netfront_queue *queue = dev_id;
 	struct net_device *dev = queue->info->netdev;
-
 	if (likely(netif_carrier_ok(dev) &&
 		   RING_HAS_UNCONSUMED_RESPONSES(&queue->rx)))
 		napi_schedule(&queue->napi);
@@ -1371,6 +1409,10 @@ static int netfront_probe(struct xenbus_device *dev,
 #ifdef CONFIG_SYSFS
 	info->netdev->sysfs_groups[0] = &xennet_dev_group;
 #endif
+
+#ifdef DEV_NETMAP
+        netfront_netmap_attach(info);
+#endif  /* DEV_NETMAP */
 
 	return 0;
 }
@@ -2163,6 +2205,9 @@ static int xennet_remove(struct xenbus_device *dev)
 
 	xennet_disconnect_backend(info);
 
+#ifdef DEV_NETMAP
+        netmap_detach(info->netdev);
+#endif  /* DEV_NETMAP */
 	if (info->netdev->reg_state == NETREG_REGISTERED)
 		unregister_netdev(info->netdev);
 
