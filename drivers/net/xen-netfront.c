@@ -143,6 +143,7 @@ struct netfront_queue {
 	grant_ref_t grant_rx_ref[NET_RX_RING_SIZE];
 #if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
         int netmap_rx_handoff;
+	int netmap_tx_handoff;
 #endif  /* DEV_NETMAP */
 
 };
@@ -381,7 +382,15 @@ static int xennet_open(struct net_device *dev)
 		spin_unlock_bh(&queue->rx_lock);
 	}
 
+#ifdef DEV_NETMAP
+	for (i = 0; i < num_queues; ++i) {
+		queue = &np->queues[i];
+		if (!queue->netmap_tx_handoff)
+			netif_tx_start_queue(netdev_get_tx_queue(dev, i));
+	}
+#else  /* ! DEV_NETMAP */
 	netif_tx_start_all_queues(dev);
+#endif /* DEV_NETMAP */
 
 	return 0;
 }
@@ -1245,9 +1254,8 @@ static irqreturn_t xennet_tx_interrupt(int irq, void *dev_id)
 {
 	struct netfront_queue *queue = dev_id;
 	unsigned long flags;
-
 #ifdef DEV_NETMAP
-	if (netmap_tx_irq(queue->info->netdev, queue->id))
+	if (netfront_netmap_tx_irq(queue))
 		return IRQ_HANDLED;
 #endif  /* DEV_NETMAP */
 	spin_lock_irqsave(&queue->tx_lock, flags);
