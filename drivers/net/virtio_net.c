@@ -1121,6 +1121,18 @@ static int virtnet_poll(struct napi_struct *napi, int budget)
 
 	virtnet_poll_cleantx(rq);
 
+#ifdef DEV_NETMAP
+        int work_done = 0;
+	struct virtnet_info *vi = rq->vq->vdev->priv;
+
+        if (netmap_rx_irq(vi->dev, vq2rxq(rq->vq), &work_done)) {
+		napi_complete(napi);
+		ND("called netmap_rx_irq");
+
+                return 1;
+        }
+#endif
+
 	received = virtnet_receive(rq, budget);
 
 	/* Out of packets? */
