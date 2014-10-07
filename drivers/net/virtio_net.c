@@ -747,16 +747,6 @@ static int virtnet_receive(struct receive_queue *rq, int budget)
 	unsigned int len, received = 0;
 	void *buf;
 
-#ifdef DEV_NETMAP
-        int work_done = 0;
-
-        if (netmap_rx_irq(vi->dev, vq2rxq(rq->vq), &work_done)) {
-		napi_complete(napi);
-		ND("called netmap_rx_irq");
-
-                return 1;
-        }
-#endif
 	while (received < budget &&
 	       (buf = virtqueue_get_buf(rq->vq, &len)) != NULL) {
 		receive_buf(vi, rq, buf, len);
@@ -776,6 +766,18 @@ static int virtnet_poll(struct napi_struct *napi, int budget)
 	struct receive_queue *rq =
 		container_of(napi, struct receive_queue, napi);
 	unsigned int r, received;
+
+#ifdef DEV_NETMAP
+        int work_done = 0;
+	struct virtnet_info *vi = rq->vq->vdev->priv;
+
+        if (netmap_rx_irq(vi->dev, vq2rxq(rq->vq), &work_done)) {
+		napi_complete(napi);
+		ND("called netmap_rx_irq");
+
+                return 1;
+        }
+#endif
 
 	received = virtnet_receive(rq, budget);
 
