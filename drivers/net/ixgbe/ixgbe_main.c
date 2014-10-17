@@ -3195,7 +3195,7 @@ static void ixgbe_configure(struct ixgbe_adapter *adapter)
 #ifdef DEV_NETMAP
 	for (i = 0; i < adapter->num_rx_queues; i++)
 		ixgbe_netmap_configure_tx_ring(adapter,
-			adapter->rx_ring[i].reg_idx);
+			adapter->rx_ring[i]->reg_idx);
 	return;
 #endif /* DEV_NETMAP */
 	for (i = 0; i < adapter->num_rx_queues; i++)
