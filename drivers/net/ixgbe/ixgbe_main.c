@@ -1121,6 +1121,24 @@ static void ixgbe_configure_msix(struct ixgbe_adapter *adapter)
 	IXGBE_WRITE_REG(&adapter->hw, IXGBE_EIAC, mask);
 }
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+/*
+ * The #ifdef DEV_NETMAP / #endif blocks in this file are meant to
+ * be a reference on how to implement netmap support in a driver.
+ * Additional comments are in ixgbe_netmap_linux.h .
+ *
+ * The code is originally developed on FreeBSD and in the interest
+ * of maintainability we try to limit differences between the two systems.
+ *
+ * <ixgbe_netmap_linux.h> contains functions for netmap support
+ * that extend the standard driver.
+ * It also defines DEV_NETMAP so further conditional sections use
+ * that instead of CONFIG_NETMAP
+ */
+#include <ixgbe_netmap_linux.h>
+#endif
+
+
 enum latency_range {
 	lowest_latency = 0,
 	low_latency = 1,
@@ -1156,23 +1174,6 @@ static u8 ixgbe_update_itr(struct ixgbe_adapter *adapter,
 
 	if (packets == 0)
 		goto update_itr_done;
-
-#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
-/*
- * The #ifdef DEV_NETMAP / #endif blocks in this file are meant to
- * be a reference on how to implement netmap support in a driver.
- * Additional comments are in ixgbe_netmap_linux.h .
- *
- * The code is originally developed on FreeBSD and in the interest
- * of maintainability we try to limit differences between the two systems.
- *
- * <ixgbe_netmap_linux.h> contains functions for netmap support
- * that extend the standard driver.
- * It also defines DEV_NETMAP so further conditional sections use
- * that instead of CONFIG_NETMAP
- */
-#include <ixgbe_netmap_linux.h>
-#endif
 
 	/* simple throttlerate management
 	 *    0-20MB/s lowest (100000 ints/s)
