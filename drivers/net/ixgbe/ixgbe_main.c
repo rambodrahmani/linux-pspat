@@ -793,7 +793,7 @@ static bool ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 	* Same as the txeof routine: only wakeup clients on intr.
 	*/
 	if (netmap_rx_irq(adapter->netdev, rx_ring->queue_index, work_done))
-		return;
+		return true; /* no more interrupts */
 #endif /* DEV_NETMAP */
 
 	i = rx_ring->next_to_clean;
