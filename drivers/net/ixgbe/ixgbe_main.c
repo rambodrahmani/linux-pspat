@@ -7141,6 +7141,10 @@ static void __devexit ixgbe_remove(struct pci_dev *pdev)
 	struct net_device *netdev = pci_get_drvdata(pdev);
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
 
+#ifdef DEV_NETMAP
+	netmap_detach(netdev);
+#endif /* DEV_NETMAP */
+
 	set_bit(__IXGBE_DOWN, &adapter->state);
 	/* clear the module not found bit to make sure the worker won't
 	 * reschedule
