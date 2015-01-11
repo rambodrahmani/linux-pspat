@@ -38,6 +38,10 @@ struct veth_priv {
 	unsigned ip_summed;
 };
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <veth_netmap.h>
+#endif
+
 /*
  * ethtool interface
  */
@@ -235,6 +239,9 @@ static int veth_open(struct net_device *dev)
 		netif_carrier_on(dev);
 		netif_carrier_on(priv->peer);
 	}
+#ifdef DEV_NETMAP
+	netmap_enable_all_rings(dev);
+#endif /* DEV_NETMAP */
 	return 0;
 }
 
@@ -242,6 +249,9 @@ static int veth_close(struct net_device *dev)
 {
 	struct veth_priv *priv = netdev_priv(dev);
 
+#ifdef DEV_NETMAP
+	netmap_disable_all_rings(dev);
+#endif /* DEV_NETMAP */
 	netif_carrier_off(dev);
 	netif_carrier_off(priv->peer);
 
@@ -272,6 +282,9 @@ static int veth_dev_init(struct net_device *dev)
 
 	priv = netdev_priv(dev);
 	priv->stats = stats;
+#ifdef DEV_NETMAP
+	veth_netmap_attach(dev);
+#endif /* DEV_NETMAP */
 	return 0;
 }
 
@@ -279,6 +292,9 @@ static void veth_dev_free(struct net_device *dev)
 {
 	struct veth_priv *priv;
 
+#ifdef DEV_NETMAP
+	netmap_detach(dev);
+#endif /* DEV_NETMAP */
 	priv = netdev_priv(dev);
 	free_percpu(priv->stats);
 	free_netdev(dev);
