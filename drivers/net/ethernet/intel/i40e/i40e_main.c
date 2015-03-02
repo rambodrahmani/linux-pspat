@@ -97,6 +97,23 @@ MODULE_DESCRIPTION("Intel(R) Ethernet Connection XL710 Network Driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_VERSION);
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+/*
+ * The #ifdef DEV_NETMAP / #endif blocks in this file are meant to
+ * be a reference on how to implement netmap support in a driver.
+ * Additional comments are in ixgbe_netmap_linux.h .
+ *
+ * The code is originally developed on FreeBSD and in the interest
+ * of maintainability we try to limit differences between the two systems.
+ *
+ * <ixgbe_netmap_linux.h> contains functions for netmap support
+ * that extend the standard driver.
+ * It also defines DEV_NETMAP so further conditional sections use
+ * that instead of CONFIG_NETMAP
+ */
+#include <i40e_netmap_linux.h>
+#endif
+
 /**
  * i40e_allocate_dma_mem_d - OS specific memory alloc for shared code
  * @hw:   pointer to the HW structure
@@ -9031,6 +9048,11 @@ int i40e_vsi_release(struct i40e_vsi *vsi)
 		return -ENODEV;
 	}
 
+#ifdef DEV_NETMAP
+	if (vsi->netdev_registered)
+		netmap_detach(vsi->netdev);
+#endif
+
 	uplink_seid = vsi->uplink_seid;
 	if (vsi->type != I40E_VSI_SRIOV) {
 		if (vsi->netdev_registered) {
@@ -9377,6 +9399,12 @@ struct i40e_vsi *i40e_vsi_setup(struct i40e_pf *pf, u8 type,
 	    (vsi->type == I40E_VSI_VMDQ2)) {
 		ret = i40e_vsi_config_rss(vsi);
 	}
+
+#ifdef DEV_NETMAP
+	if (vsi->netdev_registered)
+		i40e_netmap_attach(vsi);
+#endif
+
 	return vsi;
 
 err_rings:
