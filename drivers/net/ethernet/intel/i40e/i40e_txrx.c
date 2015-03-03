@@ -656,6 +656,11 @@ static bool i40e_clean_tx_irq(struct i40e_vsi *vsi,
 	unsigned int total_bytes = 0, total_packets = 0;
 	unsigned int budget = vsi->work_limit;
 
+#ifdef DEV_NETMAP
+	if (tx_ring->netdev && netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index))
+		return true;
+#endif /* DEV_NETMAP */
+
 	tx_buf = &tx_ring->tx_bi[i];
 	tx_desc = I40E_TX_DESC(tx_ring, i);
 	i -= tx_ring->count;
@@ -1754,6 +1759,13 @@ static int i40e_clean_rx_irq(struct i40e_ring *rx_ring, int budget)
 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
 	u16 cleaned_count = I40E_DESC_UNUSED(rx_ring);
 	bool failure = false;
+
+#ifdef DEV_NETMAP
+	int dummy;
+	if (rx_ring->netdev &&
+	    netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &dummy))
+		return 1;
+#endif /* DEV_NETMAP */
 
 	while (likely(total_rx_packets < budget)) {
 		union i40e_rx_desc *rx_desc;
