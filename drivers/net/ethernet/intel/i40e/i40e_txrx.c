@@ -27,6 +27,10 @@
 
 #include "i40e.h"
 
+#if defined(CONFIG_NETMAP) || defined (CONFIG_NETMAP_MODULE)
+#include <i40e_netmap_linux.h>
+#endif /* DEV_NETMAP */
+
 static inline __le64 build_ctob(u32 td_cmd, u32 td_offset, unsigned int size,
 				u32 td_tag)
 {
