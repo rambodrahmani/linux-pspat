@@ -10,6 +10,10 @@
 #include "i40e_txrx_common.h"
 #include "i40e_xsk.h"
 
+#if defined(CONFIG_NETMAP) || defined (CONFIG_NETMAP_MODULE)
+#include <i40e_netmap_linux.h>
+#endif /* DEV_NETMAP */
+
 #define I40E_TXD_CMD (I40E_TX_DESC_CMD_EOP | I40E_TX_DESC_CMD_RS)
 /**
  * i40e_fdir - Generate a Flow Director descriptor based on fdata
