@@ -109,19 +109,7 @@ MODULE_VERSION(DRV_VERSION);
 
 static struct workqueue_struct *i40e_wq;
 #if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
-/*
- * The #ifdef DEV_NETMAP / #endif blocks in this file are meant to
- * be a reference on how to implement netmap support in a driver.
- * Additional comments are in ixgbe_netmap_linux.h .
- *
- * The code is originally developed on FreeBSD and in the interest
- * of maintainability we try to limit differences between the two systems.
- *
- * <ixgbe_netmap_linux.h> contains functions for netmap support
- * that extend the standard driver.
- * It also defines DEV_NETMAP so further conditional sections use
- * that instead of CONFIG_NETMAP
- */
+#define NETMAP_I40E_MAIN
 #include <i40e_netmap_linux.h>
 #endif
 
