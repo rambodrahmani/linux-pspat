@@ -2884,6 +2884,10 @@ int e1000e_up(struct e1000_adapter *adapter)
 
 	netif_wake_queue(adapter->netdev);
 
+#ifdef DEV_NETMAP
+	netmap_enable_all_rings(adapter->netdev);
+#endif /* DEV_NETMAP */
+
 	/* fire a link change interrupt to start the watchdog */
 	ew32(ICS, E1000_ICS_LSC);
 	return 0;
