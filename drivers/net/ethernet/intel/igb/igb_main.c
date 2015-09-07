@@ -1513,10 +1513,6 @@ int igb_up(struct igb_adapter *adapter)
 
 	netif_tx_start_all_queues(adapter->netdev);
 
-#ifdef DEV_NETMAP
-	netmap_enable_all_rings(adapter->netdev);
-#endif /* DEV_NETMAP */
-
 	/* start the watchdog. */
 	hw->mac.get_link_status = 1;
 	schedule_work(&adapter->watchdog_task);
@@ -1549,10 +1545,6 @@ void igb_down(struct igb_adapter *adapter)
 	/* flush both disables and wait for them to finish */
 	wrfl();
 	msleep(10);
-
-#ifdef DEV_NETMAP
-	netmap_disable_all_rings(netdev);
-#endif /* DEV_NETMAP */
 
 	for (i = 0; i < adapter->num_q_vectors; i++)
 		napi_disable(&(adapter->q_vector[i]->napi));
@@ -2570,10 +2562,6 @@ static int __igb_open(struct net_device *netdev, bool resuming)
 	}
 
 	netif_tx_start_all_queues(netdev);
-
-#ifdef DEV_NETMAP
-	netmap_enable_all_rings(netdev);
-#endif /* DEV_NETMAP */
 
 	if (!resuming)
 		pm_runtime_put(&pdev->dev);

@@ -762,7 +762,6 @@ static int virtnet_open(struct net_device *dev)
 #ifdef DEV_NETMAP
 	int ok = virtio_netmap_init_buffers(vi);
 
-	netmap_enable_all_rings(dev);
 	if (ok) {
 		virtnet_napi_enable(vi);
 		return 0;
@@ -836,9 +835,6 @@ static int virtnet_close(struct net_device *dev)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
 
-#ifdef DEV_NETMAP
-	netmap_disable_all_rings(dev);
-#endif
 	/* Make sure refill_work doesn't re-enable napi! */
 	cancel_delayed_work_sync(&vi->refill);
 	napi_disable(&vi->napi);
