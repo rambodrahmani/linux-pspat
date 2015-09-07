@@ -3585,10 +3585,6 @@ static int rtl8169_open(struct net_device *dev)
 
 	napi_enable(&tp->napi);
 
-#ifdef DEV_NETMAP
-	netmap_enable_all_rings(dev);
-#endif /* DEV_NETMAP */
-
 	rtl8169_init_phy(dev, tp);
 
 	rtl8169_set_features(dev, dev->features);
@@ -4558,19 +4554,11 @@ static void rtl8169_wait_for_quiescence(struct net_device *dev)
 	/* Wait for any pending NAPI task to complete */
 	napi_disable(&tp->napi);
 
-#ifdef DEV_NETMAP
-	netmap_disable_all_rings(dev);
-#endif /* DEV_NETMAP */
-
 	rtl8169_irq_mask_and_ack(ioaddr);
 
 	tp->intr_mask = 0xffff;
 	RTL_W16(IntrMask, tp->intr_event);
 	napi_enable(&tp->napi);
-
-#ifdef DEV_NETMAP
-	netmap_enable_all_rings(dev);
-#endif /* DEV_NETMAP */
 }
 
 static void rtl8169_reinit_task(struct work_struct *work)
@@ -5164,10 +5152,6 @@ static void rtl8169_down(struct net_device *dev)
 	netif_stop_queue(dev);
 
 	napi_disable(&tp->napi);
-
-#ifdef DEV_NETMAP
-	netmap_disable_all_rings(dev);
-#endif /* DEV_NETMAP */
 
 	spin_lock_irq(&tp->lock);
 
