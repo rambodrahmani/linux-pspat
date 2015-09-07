@@ -4695,11 +4695,6 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 	i40e_napi_enable_all(vsi);
 	i40e_vsi_enable_irq(vsi);
 
-#ifdef DEV_NETMAP
-	if (vsi->netdev)
-		netmap_enable_all_rings(vsi->netdev);
-#endif /* DEV_NETMAP */
-
 	if ((pf->hw.phy.link_info.link_info & I40E_AQ_LINK_UP) &&
 	    (vsi->netdev)) {
 		i40e_print_link_message(vsi, true);
@@ -4791,11 +4786,6 @@ void i40e_down(struct i40e_vsi *vsi)
 	i40e_vsi_disable_irq(vsi);
 	i40e_vsi_control_rings(vsi, false);
 	i40e_napi_disable_all(vsi);
-
-#ifdef DEV_NETMAP
-	if (vsi->netdev)
-		netmap_disable_all_rings(vsi->netdev);
-#endif /* DEV_NETMAP */
 
 	for (i = 0; i < vsi->num_queue_pairs; i++) {
 		i40e_clean_tx_ring(vsi->tx_rings[i]);
