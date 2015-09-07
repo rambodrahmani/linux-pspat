@@ -4309,10 +4309,6 @@ static void ixgbe_up_complete(struct ixgbe_adapter *adapter)
 	/* enable transmits */
 	netif_tx_start_all_queues(adapter->netdev);
 
-#ifdef DEV_NETMAP
-	netmap_enable_all_rings(adapter->netdev);
-#endif
-
 	/* bring the link up in the watchdog, this could race with our first
 	 * link up interrupt but shouldn't be a problem */
 	adapter->flags |= IXGBE_FLAG_NEED_LINK_UPDATE;
@@ -4559,10 +4555,6 @@ void ixgbe_down(struct ixgbe_adapter *adapter)
 	ixgbe_irq_disable(adapter);
 
 	ixgbe_napi_disable_all(adapter);
-
-#ifdef DEV_NETMAP
-	netmap_disable_all_rings(netdev);
-#endif
 
 	adapter->flags2 &= ~(IXGBE_FLAG2_FDIR_REQUIRES_REINIT |
 			     IXGBE_FLAG2_RESET_REQUESTED);
