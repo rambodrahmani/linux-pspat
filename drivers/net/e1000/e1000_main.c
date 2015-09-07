@@ -410,10 +410,6 @@ int e1000_up(struct e1000_adapter *adapter)
 
 	netif_wake_queue(adapter->netdev);
 
-#ifdef DEV_NETMAP
-	netmap_enable_all_rings(adapter->netdev);
-#endif /* DEV_NETMAP */
-
 	/* fire a link change interrupt to start the watchdog */
 	ew32(ICS, E1000_ICS_LSC);
 	return 0;
@@ -496,10 +492,6 @@ void e1000_down(struct e1000_adapter *adapter)
 	rctl = er32(RCTL);
 	ew32(RCTL, rctl & ~E1000_RCTL_EN);
 	/* flush and sleep below */
-
-#ifdef DEV_NETMAP
-	netmap_disable_all_rings(netdev);
-#endif /* DEV_NETMAP */
 
 	netif_tx_disable(netdev);
 
@@ -1314,10 +1306,6 @@ static int e1000_open(struct net_device *netdev)
 	e1000_irq_enable(adapter);
 
 	netif_start_queue(netdev);
-
-#ifdef DEV_NETMAP
-	netmap_enable_all_rings(netdev);
-#endif
 
 	/* fire a link status change interrupt to start the watchdog */
 	ew32(ICS, E1000_ICS_LSC);
