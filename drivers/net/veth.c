@@ -209,9 +209,6 @@ static int veth_open(struct net_device *dev)
 		netif_carrier_on(dev);
 		netif_carrier_on(peer);
 	}
-#ifdef DEV_NETMAP
-	netmap_enable_all_rings(dev);
-#endif /* DEV_NETMAP */
 	return 0;
 }
 
@@ -220,9 +217,6 @@ static int veth_close(struct net_device *dev)
 	struct veth_priv *priv = netdev_priv(dev);
 	struct net_device *peer = rtnl_dereference(priv->peer);
 
-#ifdef DEV_NETMAP
-	netmap_disable_all_rings(dev);
-#endif /* DEV_NETMAP */
 	netif_carrier_off(dev);
 	if (peer)
 		netif_carrier_off(peer);
