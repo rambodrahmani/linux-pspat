@@ -728,7 +728,6 @@ static int virtnet_open(struct net_device *dev)
 
 #ifdef DEV_NETMAP
 	virtio_netmap_init_buffers(vi);
-	netmap_enable_all_rings(dev);
 #endif
 	virtnet_napi_enable(vi);
 	return 0;
@@ -783,9 +782,6 @@ static int virtnet_close(struct net_device *dev)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
 
-#ifdef DEV_NETMAP
-	netmap_disable_all_rings(dev);
-#endif
 	napi_disable(&vi->napi);
 
 	return 0;
