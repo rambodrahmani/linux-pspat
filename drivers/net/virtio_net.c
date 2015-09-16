@@ -1760,6 +1760,9 @@ static unsigned int features[] = {
 	VIRTIO_NET_F_CTRL_RX, VIRTIO_NET_F_CTRL_VLAN,
 	VIRTIO_NET_F_GUEST_ANNOUNCE, VIRTIO_NET_F_MQ,
 	VIRTIO_NET_F_CTRL_MAC_ADDR,
+#ifdef VIRTIO_NET_F_PTNETMAP
+	VIRTIO_NET_F_PTNETMAP,
+#endif
 };
 
 static struct virtio_driver virtio_net_driver = {
