@@ -3130,6 +3130,9 @@ static unsigned int features_legacy[] = {
 	VIRTNET_FEATURES,
 	VIRTIO_NET_F_GSO,
 	VIRTIO_F_ANY_LAYOUT,
+#ifdef VIRTIO_NET_F_PTNETMAP
+	VIRTIO_NET_F_PTNETMAP,
+#endif
 };
 
 static struct virtio_driver virtio_net_driver = {
