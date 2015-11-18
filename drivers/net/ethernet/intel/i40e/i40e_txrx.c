@@ -786,7 +786,7 @@ static bool i40e_clean_tx_irq(struct i40e_vsi *vsi,
 	unsigned int budget = vsi->work_limit;
 
 #ifdef DEV_NETMAP
-	if (tx_ring->netdev && netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index))
+	if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index))
 		return true;
 #endif /* DEV_NETMAP */
 
