@@ -655,7 +655,7 @@ static bool i40e_clean_tx_irq(struct i40e_ring *tx_ring, int budget)
 	unsigned int total_bytes = 0;
 
 #ifdef DEV_NETMAP
-	if (tx_ring->netdev && netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index))
+	if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index))
 		return true;
 #endif /* DEV_NETMAP */
 
