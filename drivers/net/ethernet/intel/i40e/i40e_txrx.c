@@ -1530,13 +1530,6 @@ static int i40e_clean_rx_irq_ps(struct i40e_ring *rx_ring, const int budget)
 	u64 qword;
 	u32 copysize;
 
-#ifdef DEV_NETMAP
-	int dummy;
-	if (rx_ring->netdev &&
-	    netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &dummy))
-		return 1;
-#endif /* DEV_NETMAP */
-
 	if (budget <= 0)
 		return 0;
 
@@ -2008,6 +2001,13 @@ int i40e_napi_poll(struct napi_struct *napi, int budget)
 
 	i40e_for_each_ring(ring, q_vector->rx) {
 		int cleaned;
+#ifdef DEV_NETMAP
+		int dummy;
+		if (netmap_rx_irq(vsi->netdev, ring->queue_index, &dummy)) {
+			/* leave clean_complete as it is */
+			continue;
+		}
+#endif /* DEV_NETMAP */
 
 		if (ring_is_ps_enabled(ring))
 			cleaned = i40e_clean_rx_irq_ps(ring, budget_per_ring);
