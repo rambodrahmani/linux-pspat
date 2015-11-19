@@ -2660,9 +2660,13 @@ static void remove_vq_common(struct virtnet_info *vi)
 static void virtnet_remove(struct virtio_device *vdev)
 {
 	struct virtnet_info *vi = vdev->priv;
-
 #ifdef DEV_NETMAP
-        netmap_detach(vi->dev);
+	/* Save the pointer, will go away after netmap_detach(). */
+	struct netmap_adapter *token = NA(vi->dev);
+
+	netmap_detach(vi->dev);
+	virtio_netmap_clean_used_rings(vi, token);
+	virtio_netmap_reclaim_unused(vi);
 #endif
 	virtnet_cpu_notif_remove(vi);
 
