@@ -770,13 +770,14 @@ static int virtnet_poll(struct napi_struct *napi, int budget)
 #ifdef DEV_NETMAP
         int work_done = 0;
 	struct virtnet_info *vi = rq->vq->vdev->priv;
+	int nm_irq = netmap_rx_irq(vi->dev, vq2rxq(rq->vq), &work_done);
 
-        if (netmap_rx_irq(vi->dev, vq2rxq(rq->vq), &work_done)) {
+	if (nm_irq == NM_IRQ_COMPLETED) {
 		napi_complete(napi);
-		ND("called netmap_rx_irq");
-
                 return 1;
-        }
+        } else if (nm_irq == NM_IRQ_RESCHED) {
+		return budget;
+	}
 #endif
 
 	received = virtnet_receive(rq, budget);
