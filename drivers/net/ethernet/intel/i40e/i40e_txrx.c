@@ -655,7 +655,7 @@ static bool i40e_clean_tx_irq(struct i40e_ring *tx_ring, int budget)
 	unsigned int total_bytes = 0;
 
 #ifdef DEV_NETMAP
-	if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index))
+	if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index) != NM_IRQ_PASS)
 		return true;
 #endif /* DEV_NETMAP */
 
@@ -2002,9 +2002,10 @@ int i40e_napi_poll(struct napi_struct *napi, int budget)
 	i40e_for_each_ring(ring, q_vector->rx) {
 		int cleaned;
 #ifdef DEV_NETMAP
-		int dummy;
-		if (netmap_rx_irq(vsi->netdev, ring->queue_index, &dummy)) {
-			/* leave clean_complete as it is */
+		int dummy, nm_irq;
+		nm_irq = netmap_rx_irq(vsi->netdev, ring->queue_index, &dummy);
+		if (nm_irq != NM_IRQ_PASS) {
+			clean_complete &= (nm_irq == NM_IRQ_COMPLETED);
 			continue;
 		}
 #endif /* DEV_NETMAP */
