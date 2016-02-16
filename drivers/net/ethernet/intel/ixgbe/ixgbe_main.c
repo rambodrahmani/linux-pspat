@@ -1127,7 +1127,7 @@ static bool ixgbe_clean_tx_irq(struct ixgbe_q_vector *q_vector,
 	 * clients, which may be sleeping on individual rings
 	 * or on a global resource for all rings.
 	 */
-	if (netmap_tx_irq(adapter->netdev, tx_ring->queue_index))
+	if (netmap_tx_irq(adapter->netdev, tx_ring->queue_index) != NM_IRQ_PASS)
 		return 1; /* seems to be ignored */
 #endif /* DEV_NETMAP */
 
@@ -2089,9 +2089,10 @@ static int ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 	/*
 	 * 	 Same as the txeof routine: only wakeup clients on intr.
 	 */
-	int dummy;
-	if (netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &dummy))
-		return true; /* no more interrupts */
+	int dummy, nm_irq;
+	nm_irq = netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &dummy);
+	if (nm_irq != NM_IRQ_PASS)
+		return (nm_irq == NM_IRQ_RESCHED) ? budget : 1;
 #endif /* DEV_NETMAP */
 
 	while (likely(total_rx_packets < budget)) {
