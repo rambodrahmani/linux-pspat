@@ -747,7 +747,7 @@ static bool i40e_clean_tx_irq(struct i40e_vsi *vsi,
 	unsigned int budget = vsi->work_limit;
 
 #ifdef DEV_NETMAP
-	if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index))
+	if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index) != NM_IRQ_PASS)
 		return true;
 #endif /* DEV_NETMAP */
 
@@ -1975,7 +1975,7 @@ static int i40e_clean_rx_irq(struct i40e_ring *rx_ring, int budget)
 #ifdef DEV_NETMAP
 	int dummy;
 	if (rx_ring->netdev &&
-	    netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &dummy))
+	    netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &dummy) != NM_IRQ_PASS)
 		return 1;
 #endif /* DEV_NETMAP */
 
