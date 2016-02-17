@@ -3883,7 +3883,7 @@ static bool e1000_clean_tx_irq(struct e1000_adapter *adapter,
 	unsigned int bytes_compl = 0, pkts_compl = 0;
 
 #ifdef DEV_NETMAP
-	if (netmap_tx_irq(netdev, 0))
+	if (netmap_tx_irq(netdev, 0) != NM_IRQ_PASS)
 		return 1; /* cleaned ok */
 #endif /* DEV_NETMAP */
 	i = tx_ring->next_to_clean;
@@ -4409,9 +4409,13 @@ static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
 
 #ifdef DEV_NETMAP
-	ND("calling netmap_rx_irq");
-	if (netmap_rx_irq(netdev, 0, work_done))
-		return 1; /* seems to be ignored */
+	int nm_irq = netmap_rx_irq(netdev, 0, work_done);
+	if (nm_irq != NM_IRQ_PASS) {
+		if (nm_irq == NM_IRQ_RESCHED) {
+			*work_done = work_to_do;
+		}
+		return 1;
+	}
 #endif /* DEV_NETMAP */
 	i = rx_ring->next_to_clean;
 	rx_desc = E1000_RX_DESC(*rx_ring, i);
