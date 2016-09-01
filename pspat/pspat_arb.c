@@ -13,6 +13,7 @@
 #include <linux/delay.h>
 #include <linux/netdevice.h>
 #include <net/sch_generic.h>
+#include <linux/rcupdate.h>
 
 
 #define START_NEW_CACHELINE	____cacheline_aligned_in_smp
@@ -221,37 +222,10 @@ extern int (*pspat_handler)(struct sk_buff *, struct Qdisc *,
 			    struct net_device *,
 			    struct netdev_queue *);
 
-int
-pspat_arbiter_register(struct pspat *arb)
-{
-#ifdef EMULATE
-	arb->emu_tmr.function = emu_tmr_cb;
-	arb->emu_tmr.data = (long unsigned)arb;
-	mod_timer(&arb->emu_tmr, jiffies + msecs_to_jiffies(1000));
-#endif
-
-	pspat_handler = pspat_default_handler; /* XXX use RCU here */
-
-	return 0;
-}
-
-int
-pspat_arbiter_unregister(struct pspat *arb)
-{
-#ifdef EMULATE
-	del_timer_sync(&arb->emu_tmr);
-#endif
-
-	pspat_handler = NULL; /* XXX use RCU here */
-
-	return 0;
-}
-
 static int
 pspat_open(struct inode *inode, struct file *f)
 {
 	struct pspat *arb;
-	int ret;
 
 	if (instances) {
 		printk("PSPAT arbiter already exists\n");
@@ -266,12 +240,14 @@ pspat_open(struct inode *inode, struct file *f)
 	init_waitqueue_head(&arb->wqh);
 	f->private_data = arb;
 
-	ret = pspat_arbiter_register(arb);
-	if (ret) {
-		printk("Failed to register arbiter\n");
-		kfree(arb);
-		return ret;
-	}
+#ifdef EMULATE
+	arb->emu_tmr.function = emu_tmr_cb;
+	arb->emu_tmr.data = (long unsigned)arb;
+	mod_timer(&arb->emu_tmr, jiffies + msecs_to_jiffies(1000));
+#endif
+	/* Register the arbiter. */
+	rcu_assign_pointer(pspat_handler, pspat_default_handler);
+	synchronize_rcu();
 
 	instances ++;
 
@@ -283,7 +259,12 @@ pspat_release(struct inode *inode, struct file *f)
 {
 	struct pspat *arb = (struct pspat *)f->private_data;
 
-	pspat_arbiter_unregister(arb);
+#ifdef EMULATE
+	del_timer_sync(&arb->emu_tmr);
+#endif
+	/* Unregister the arbiter. */
+	rcu_assign_pointer(pspat_handler, NULL);
+	synchronize_rcu();
 
 	kfree(arb);
 	f->private_data = NULL;
