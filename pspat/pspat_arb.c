@@ -187,8 +187,8 @@ pspat_sysctl_fini(void)
 {
 	if (pspat_sysctl_hdr)
 		unregister_sysctl_table(pspat_sysctl_hdr);
-	if (pspat_root[0].child)
-		kfree(pspat_root[0].child);
+	if (pspat_static_ctl[0].child)
+		kfree(pspat_static_ctl[0].child);
 	if (pspat_stats)
 		free_page((unsigned long)pspat_stats);
 }
@@ -258,12 +258,6 @@ pspat_open(struct inode *inode, struct file *f)
 		return -EBUSY;
 	}
 
-	ret = pspat_sysctl_init();
-	if (ret) {
-		printk("pspat_sysctl_init() failed\n");
-		return ret;
-	}
-
 	arb = kzalloc(sizeof(*arb), GFP_KERNEL);
 	if (!arb) {
 		return -ENOMEM;
@@ -293,8 +287,6 @@ pspat_release(struct inode *inode, struct file *f)
 
 	kfree(arb);
 	f->private_data = NULL;
-
-	pspat_sysctl_fini();
 
 	instances --;
 
@@ -346,6 +338,12 @@ pspat_init(void)
 {
 	int ret;
 
+	ret = pspat_sysctl_init();
+	if (ret) {
+		printk("pspat_sysctl_init() failed\n");
+		return ret;
+	}
+
 	ret = misc_register(&pspat_misc);
 	if (ret) {
 		printk("Failed to register rlite misc device\n");
@@ -359,6 +357,7 @@ static void __exit
 pspat_fini(void)
 {
 	misc_deregister(&pspat_misc);
+	pspat_sysctl_fini();
 }
 
 module_init(pspat_init);
