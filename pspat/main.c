@@ -218,19 +218,16 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 	}
 
 	for (;;) {
+		/* Wait for a notification or a signal. */
 		if (blocking) {
-			/* Wait for a notification or a signal. */
 			current->state = TASK_INTERRUPTIBLE;
 			schedule();
+			current->state = TASK_RUNNING;
 		}
 
 		if (signal_pending(current)) {
 			printk("Got a signal, returning to userspace\n");
-			return 0;
-		}
-
-		if (blocking) {
-			current->state = TASK_RUNNING;
+			break;
 		}
 
 		/* Invoke the arbiter. */
