@@ -209,26 +209,37 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 {
 	struct pspat *arb = (struct pspat *)f->private_data;
 	DECLARE_WAITQUEUE(wait, current);
+	bool blocking = false;
 
 	(void) cmd;
 
-	add_wait_queue(&arb->wqh, &wait);
+	if (blocking) {
+		add_wait_queue(&arb->wqh, &wait);
+	}
 
 	for (;;) {
-		/* Wait for a notification or a signal. */
-		current->state = TASK_INTERRUPTIBLE;
-		schedule();
+		if (blocking) {
+			/* Wait for a notification or a signal. */
+			current->state = TASK_INTERRUPTIBLE;
+			schedule();
+		}
+
 		if (signal_pending(current)) {
 			printk("Got a signal, returning to userspace\n");
 			return 0;
 		}
-		current->state = TASK_RUNNING;
+
+		if (blocking) {
+			current->state = TASK_RUNNING;
+		}
 
 		/* Invoke the arbiter. */
 		pspat_do_arbiter(arb);
 	}
 
-	remove_wait_queue(&arb->wqh, &wait);
+	if (blocking) {
+		remove_wait_queue(&arb->wqh, &wait);
+	}
 
 	return 0;
 }

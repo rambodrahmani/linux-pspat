@@ -11,6 +11,7 @@ int
 pspat_do_arbiter(struct pspat *arb)
 {
 	printk("Arbiter woken up\n");
+	msleep_interruptible(1000);
 
 	return 0;
 }
