@@ -15,54 +15,11 @@
 #include <net/sch_generic.h>
 #include <linux/rcupdate.h>
 
+#include "pspat.h"
 
-#define START_NEW_CACHELINE	____cacheline_aligned_in_smp
+
 
 static int instances = 0; /* To be protected by a lock. */
-
-//#define EMULATE
-#define PSPAT_QLEN           128
-
-struct pspat_queue {
-	/* Input queue, written by clients, read by the arbiter. */
-	START_NEW_CACHELINE
-	struct sk_buff		*inq[PSPAT_QLEN];
-
-	/* Data structures private to the clients. */
-	START_NEW_CACHELINE
-	uint32_t		n_pending; /* number of pending elements
-					    * in the queue */
-	uint32_t		c_tail; /* next slot to use for put operation */
-	uint32_t		c_head; /* next packet to send down */
-	uint32_t		c_shead; /* cached value of s_head */
-
-	/* Output queue and s_head index, written by the arbiter,
-	 * read by clients. */
-	START_NEW_CACHELINE
-	struct sk_buff		*outq[PSPAT_QLEN];
-	START_NEW_CACHELINE
-	uint32_t		s_head;
-
-	/* Data structures private to the arbiter. */
-	uint32_t		s_nhead; /* next packet to mark */
-	uint32_t		s_tail;	 /* start of next cacheline to copy
-					  * from inq to qcache */
-	uint32_t		s_next; /* next_packet to enq() from qcache */
-	uint32_t		q_cache_valid; /* cache can be accessed
-						* (peek, get) */
-
-	START_NEW_CACHELINE
-	struct sk_buff		*qcache[64U/sizeof(struct sk_buff *)];
-};
-
-struct pspat {
-	struct pspat_queue	queues[8]; /* NUM CORES */
-
-	wait_queue_head_t wqh;
-#ifdef EMULATE
-	struct timer_list	emu_tmr;
-#endif
-};
 
 #ifdef EMULATE
 static void
@@ -75,8 +32,8 @@ emu_tmr_cb(long unsigned arg)
 }
 #endif
 
-static int pspat_enable = 0;
-static int pspat_debug_xmit = 0;
+int pspat_enable = 0;
+int pspat_debug_xmit = 0;
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static unsigned long pspat_ulongzero = 0UL;
@@ -119,11 +76,7 @@ static struct ctl_table pspat_root[] = {
 	{}
 };
 
-struct pspat_stats {
-	unsigned long dropped;
-} __attribute__((aligned(32)));
-
-static struct pspat_stats *pspat_stats;
+struct pspat_stats *pspat_stats;
 
 static int
 pspat_sysctl_init(void)
@@ -194,29 +147,6 @@ pspat_sysctl_fini(void)
 		free_page((unsigned long)pspat_stats);
 }
 
-static int
-pspat_default_handler(struct sk_buff *skb, struct Qdisc *q,
-	              struct net_device *dev, struct netdev_queue *txq)
-{
-	int cpu;
-
-	if (pspat_debug_xmit) {
-		printk(KERN_INFO "q %p dev %p txq %p root_lock %p", q, dev, txq, qdisc_lock(q));
-	}
-
-	if (!(pspat_enable && pspat_stats)) {
-		/* Not our business. */
-		return -ENOTTY;
-	}
-
-	cpu = get_cpu(); /* also disables preemption */
-	pspat_stats[cpu].dropped++;
-	put_cpu();
-	kfree_skb(skb);
-
-	return 0;
-}
-
 /* Hook exported by net/core/dev.c */
 extern int (*pspat_handler)(struct sk_buff *, struct Qdisc *,
 			    struct net_device *,
@@ -246,7 +176,7 @@ pspat_open(struct inode *inode, struct file *f)
 	mod_timer(&arb->emu_tmr, jiffies + msecs_to_jiffies(1000));
 #endif
 	/* Register the arbiter. */
-	rcu_assign_pointer(pspat_handler, pspat_default_handler);
+	rcu_assign_pointer(pspat_handler, pspat_client_handler);
 	synchronize_rcu();
 
 	instances ++;
@@ -285,6 +215,7 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 	add_wait_queue(&arb->wqh, &wait);
 
 	for (;;) {
+		/* Wait for a notification or a signal. */
 		current->state = TASK_INTERRUPTIBLE;
 		schedule();
 		if (signal_pending(current)) {
@@ -292,7 +223,9 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 			return 0;
 		}
 		current->state = TASK_RUNNING;
-		printk("Woken up\n");
+
+		/* Invoke the arbiter. */
+		pspat_do_arbiter(arb);
 	}
 
 	remove_wait_queue(&arb->wqh, &wait);

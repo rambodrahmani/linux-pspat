@@ -1,7 +1,8 @@
 KER=`uname -r`
 CC=gcc
 
-obj-m += pspat_arb.o
+obj-m += pspat.o
+pspat-y = main.o functions.o
 
 all: ker uthread
 
