@@ -139,8 +139,15 @@
 #include <linux/hrtimer.h>
 #include <linux/netfilter_ingress.h>
 #include <linux/sctp.h>
+#include <linux/sysctl.h>
 
 #include "net-sysfs.h"
+
+typedef int (*pspat_handler_t)(struct sk_buff *, struct Qdisc *,
+				 struct net_device *,
+				 struct netdev_queue *);
+pspat_handler_t pspat_handler;
+EXPORT_SYMBOL(pspat_handler);
 
 /* Instead of increasing this, you should create a hash table. */
 #define MAX_GRO_SKBS 8
@@ -3029,6 +3036,7 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 	int rc;
 
 	qdisc_calculate_pkt_len(skb, q);
+
 	/*
 	 * Heuristic to force contended enqueues to serialize on a
 	 * separate lock before trying to get qdisc main lock.
@@ -3323,6 +3331,9 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
 
 	trace_net_dev_queue(skb);
 	if (q->enqueue) {
+		pspat_handler_t h = rcu_dereference_bh(pspat_handler);
+		rc = h ? h(skb, q, dev, txq) : -ENOTTY;
+		if (rc == -ENOTTY)
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
 	}
