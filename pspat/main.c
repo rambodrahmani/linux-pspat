@@ -155,31 +155,8 @@ extern int (*pspat_handler)(struct sk_buff *, struct Qdisc *,
 static int
 pspat_open(struct inode *inode, struct file *f)
 {
-	struct pspat *arb;
-
-	if (instances) {
-		printk("PSPAT arbiter already exists\n");
-		return -EBUSY;
-	}
-
-	arb = kzalloc(sizeof(*arb), GFP_KERNEL);
-	if (!arb) {
-		return -ENOMEM;
-	}
-
-	init_waitqueue_head(&arb->wqh);
-	f->private_data = arb;
-
-#ifdef EMULATE
-	arb->emu_tmr.function = emu_tmr_cb;
-	arb->emu_tmr.data = (long unsigned)arb;
-	mod_timer(&arb->emu_tmr, jiffies + msecs_to_jiffies(1000));
-#endif
-	/* Register the arbiter. */
-	rcu_assign_pointer(pspat_handler, pspat_client_handler);
-	synchronize_rcu();
-
-	instances ++;
+	/* Do nothing, initialization is on-demand. */
+	f->private_data = NULL;
 
 	return 0;
 }
@@ -188,6 +165,10 @@ static int
 pspat_release(struct inode *inode, struct file *f)
 {
 	struct pspat *arb = (struct pspat *)f->private_data;
+
+	if (!arb) {
+		return 0;
+	}
 
 #ifdef EMULATE
 	del_timer_sync(&arb->emu_tmr);
@@ -210,6 +191,33 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 	struct pspat *arb = (struct pspat *)f->private_data;
 	DECLARE_WAITQUEUE(wait, current);
 	bool blocking = false;
+
+	/* Create the arbiter on demand. */
+	if (!arb) {
+		if (instances) {
+			printk("PSPAT arbiter already exists\n");
+			return -EBUSY;
+		}
+
+		arb = kzalloc(sizeof(*arb), GFP_KERNEL);
+		if (!arb) {
+			return -ENOMEM;
+		}
+
+		init_waitqueue_head(&arb->wqh);
+		f->private_data = arb;
+
+#ifdef EMULATE
+		arb->emu_tmr.function = emu_tmr_cb;
+		arb->emu_tmr.data = (long unsigned)arb;
+		mod_timer(&arb->emu_tmr, jiffies + msecs_to_jiffies(1000));
+#endif
+		/* Register the arbiter. */
+		rcu_assign_pointer(pspat_handler, pspat_client_handler);
+		synchronize_rcu();
+
+		instances ++;
+	}
 
 	(void) cmd;
 

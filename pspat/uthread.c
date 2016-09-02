@@ -7,20 +7,21 @@
 
 int main()
 {
-    const char *devname = "/dev/pspat";
-    int ret;
-    int fd;
+	const char *devname = "/dev/pspat";
+	int ret;
+	int fd;
 
-    fd = open(devname, O_RDWR);
-    if (fd < 0) {
-        perror("open()");
-        return -1;
-    }
+	fd = open(devname, O_RDWR);
+	if (fd < 0) {
+		perror("open()");
+		return -1;
+	}
 
-    ret = ioctl(fd, 70, NULL);
-    printf("ioctl() --> %d\n", ret);
+	/* Sart the arbiter. */
+	ret = ioctl(fd, 1000, NULL);
+	printf("ioctl() --> %d\n", ret);
 
-    close(fd);
+	close(fd);
 
-    return 0;
+	return 0;
 }
