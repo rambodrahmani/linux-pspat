@@ -7,10 +7,10 @@ pspat-y = main.o functions.o
 all: ker uthread
 
 ker:
-	make -C /lib/modules/$(KER)/build M=$(PWD) modules
+	make -C .. M=$$(pwd)
 
 uthread: uthread.o
 
 clean:
-	make -C /lib/modules/$(KER)/build M=$(PWD) clean
+	make -C .. clean
 	-rm uthread

@@ -25,7 +25,19 @@ pspat_arb_get_skb(struct pspat_queue *pq)
 	return NULL;
 }
 
-#if 0
+static void
+pspat_mark(struct sk_buff *skb)
+{
+	// XXX mark skb as eligible for transmission
+}
+
+static uint64_t
+pspat_pkt_tsc(uint32_t rate, unsigned int len)
+{
+	// XXX
+	return 0;
+}
+
 static void
 pspat_arb_publish(struct pspat_queue *pq)
 {
@@ -37,7 +49,6 @@ pspat_arb_ack(struct pspat_queue *pq)
 {
 	// XXX zero out the used skbs in the client queue
 }
-#endif
 
 /* Function implementing the arbiter. */
 int
@@ -51,20 +62,21 @@ pspat_do_arbiter(struct pspat *arb)
 	while (!need_resched()) {
 		int i;
 		uint64_t now = rdtsc();
+		struct Qdisc **prevq, *q;
 
 		rcu_read_lock_bh();
 
 		/*
-		 * bring in pending packets, arrived between next_link_idle and now
-		 * (we assume they arrived at last_check)
+		 * bring in pending packets, arrived between next_link_idle
+		 * and now (we assume they arrived at last_check)
 		 */
 		for (i = 0; i < arb->n_queues; i++) {
 			struct pspat_queue *pq = arb->queues + i;
 			struct sk_buff *skb;
 			/*
-			 * Skip clients with at least one packet/burst already in the
-			 * scheduler. This is true if s_nhead != s_tail, and
-			 * is a useful optimization.
+			 * Skip clients with at least one packet/burst already
+			 * in the scheduler. This is true if s_nhead != s_tail,
+			 * and is a useful optimization.
 			 */
 			if (pspat_pending_mark(pq)) {
 				continue;
@@ -102,9 +114,11 @@ pspat_do_arbiter(struct pspat *arb)
 					 */
 					continue;
 				}
-				if (test_and_set_bit(__QDISC_STATE_SCHED, &q->state)) {
-					/* we have alredy scheduled this Qdisc for
-					 * transmission
+				// XXX maybe there is no need for atomicity
+				if (test_and_set_bit(__QDISC_STATE_SCHED,
+							&q->state)) {
+					/* we have alredy scheduled this Qdisc
+					 * for transmission
 					 */
 					continue;
 				}
@@ -113,16 +127,34 @@ pspat_do_arbiter(struct pspat *arb)
 				output_queue = q;
 			}
 		}
-#if 0
-		ndeq = 0;
-		while (arb->next_link_idle <= now && ndeq < pspat_arb_batch_limit) {
-			struct sk_buff *skb = qdisc->dequeue(qdisc);
+		prevq = &output_queue;
+		q = output_queue;
+		while (q) {
+			struct Qdisc *cq;
+			ndeq = 0;
+			while (q->pspat_next_link_idle <= now &&
+			       ndeq < q->pspat_batch_limit)
+			{
+				struct sk_buff *skb = q->dequeue(q);
+				// XXX check all other things to on dequeue
 
-			if (skb == NULL)
-				break;
-			pspat_mark(skb); // recover the cpuid from the skb */
-			arb->next_link_idle += pkt_tsc(arb, /* packet len? */);
-			ndeq++;
+				if (skb == NULL)
+					break;
+				pspat_mark(skb);
+				q->pspat_next_link_idle +=
+					pspat_pkt_tsc(q->pspat_rate, skb->len);
+				ndeq++;
+			}
+			cq = q;
+			q = q->next_sched;
+			if (!qdisc_qlen(cq)) {
+				// extract from the queue
+				*prevq = q;
+				// reset the flag
+				clear_bit(__QDISC_STATE_SCHED, &q->state);
+			}
+			if (q)
+				prevq = &q->next_sched;
 		}
 
 		if (ndeq > 0) {
@@ -132,7 +164,6 @@ pspat_do_arbiter(struct pspat *arb)
 				pspat_arb_ack(pq);     /* to clients */
 			}
 		}
-#endif
 
 		rcu_read_unlock_bh();
 	}
