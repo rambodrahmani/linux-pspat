@@ -102,8 +102,7 @@ pspat_do_arbiter(struct pspat *arb)
 				 * the client chose the txq before sending
 				 * the skb to us, so we only need to recover it
 				 */
-				txq = netdev_get_tx_queue(dev, 
-						skb_get_queue_mapping(skb));
+				txq = skb_get_tx_queue(dev, skb);
 
 				q = rcu_dereference_bh(txq->qdisc);
 				rc = q->enqueue(skb, q) & NET_XMIT_MASK;
@@ -136,7 +135,16 @@ pspat_do_arbiter(struct pspat *arb)
 			       ndeq < q->pspat_batch_limit)
 			{
 				struct sk_buff *skb = q->dequeue(q);
-				// XXX check all other things to on dequeue
+				// XXX things to do when dequeing:
+				// - q->gso_skb may contain a "requeued"
+				//   packet which should go out first
+				//   (without calling ->dequeue())
+				// - skb that come out of ->dequeue() must
+				//   be "validated" (for segmentation,
+				//   checksumming and so on). I think
+				//   validation may be done in parallel
+				//   in the sender threads.
+				//   (see validate_xmit_skb_list())
 
 				if (skb == NULL)
 					break;
