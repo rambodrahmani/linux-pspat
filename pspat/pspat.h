@@ -33,6 +33,7 @@ struct pspat_queue {
 	uint32_t		s_next; /* next_packet to enq() from qcache */
 	uint32_t		q_cache_valid; /* cache can be accessed
 						* (peek, get) */
+	uint64_t		arb_extract_next;
 
 	START_NEW_CACHELINE
 	struct sk_buff		*qcache[64U/sizeof(struct sk_buff *)];
@@ -40,6 +41,7 @@ struct pspat_queue {
 
 struct pspat {
 	struct pspat_queue	queues[8]; /* NUM CORES */
+	int			n_queues;
 
 	wait_queue_head_t wqh;
 #ifdef EMULATE
@@ -54,6 +56,7 @@ int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 
 extern int pspat_enable;
 extern int pspat_debug_xmit;
+extern uint64_t pspat_arb_interval_tsc;
 extern struct pspat_stats *pspat_stats;
 
 struct pspat_stats {

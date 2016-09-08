@@ -34,6 +34,8 @@ emu_tmr_cb(long unsigned arg)
 
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
+uint64_t pspat_arb_interval_tsc = 10000; // XXX make this a sysctl
+uint64_t pspat_arb_batch_limit = 40; 	 // XXX make this a sysctl
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static unsigned long pspat_ulongzero = 0UL;
