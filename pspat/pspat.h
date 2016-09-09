@@ -13,29 +13,20 @@ struct pspat_queue {
 
 	/* Data structures private to the clients. */
 	START_NEW_CACHELINE
-	uint32_t		n_pending; /* number of pending elements
-					    * in the queue */
-	uint32_t		c_tail; /* next slot to use for put operation */
-	uint32_t		c_head; /* next packet to send down */
-	uint32_t		c_shead; /* cached value of s_head */
+	uint32_t		cli_inq_tail; /* insertion point in inq  */
+	uint32_t		cli_outq_head; /* extraction point from outq */
 
 	/* Output queue and s_head index, written by the arbiter,
 	 * read by clients. */
 	START_NEW_CACHELINE
 	struct sk_buff		*outq[PSPAT_QLEN];
-	START_NEW_CACHELINE
-	uint32_t		s_head;
 
 	/* Data structures private to the arbiter. */
-	uint32_t		s_nhead; /* next packet to mark */
-	uint32_t		s_tail;	 /* start of next cacheline to copy
-					  * from inq to qcache */
-	uint32_t		s_next; /* next_packet to enq() from qcache */
-	uint32_t		q_cache_valid; /* cache can be accessed
-						* (peek, get) */
+	START_NEW_CACHELINE
+	uint32_t		arb_outq_tail; /* insertion point in outq  */
+	uint32_t		arb_inq_head; /* extraction point from inq */
 	uint64_t		arb_extract_next;
 
-	START_NEW_CACHELINE
 	struct sk_buff		*qcache[64U/sizeof(struct sk_buff *)];
 };
 
@@ -48,6 +39,8 @@ struct pspat {
 	struct timer_list	emu_tmr;
 #endif
 };
+
+extern struct pspat *pspat_arb;
 
 int pspat_do_arbiter(struct pspat *arb);
 

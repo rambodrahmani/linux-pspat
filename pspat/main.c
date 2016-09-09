@@ -21,6 +21,8 @@
 
 static int instances = 0; /* To be protected by a lock. */
 
+struct pspat *pspat_arb;
+
 #ifdef EMULATE
 static void
 emu_tmr_cb(long unsigned arg)
@@ -159,28 +161,24 @@ pspat_open(struct inode *inode, struct file *f)
 {
 	/* Do nothing, initialization is on-demand. */
 	f->private_data = NULL;
-
 	return 0;
 }
 
 static int
 pspat_release(struct inode *inode, struct file *f)
 {
-	struct pspat *arb = (struct pspat *)f->private_data;
-
-	if (!arb) {
+	if (!pspat_arb) {
 		return 0;
 	}
 
 #ifdef EMULATE
-	del_timer_sync(&arb->emu_tmr);
+	del_timer_sync(&pspat_arb->emu_tmr);
 #endif
 	/* Unregister the arbiter. */
 	rcu_assign_pointer(pspat_handler, NULL);
 	synchronize_rcu();
 
-	kfree(arb);
-	f->private_data = NULL;
+	kfree(pspat_arb);
 
 	instances --;
 
@@ -190,29 +188,27 @@ pspat_release(struct inode *inode, struct file *f)
 static long
 pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 {
-	struct pspat *arb = (struct pspat *)f->private_data;
 	DECLARE_WAITQUEUE(wait, current);
 	bool blocking = false;
 
 	/* Create the arbiter on demand. */
-	if (!arb) {
+	if (!pspat_arb) {
 		if (instances) {
 			printk("PSPAT arbiter already exists\n");
 			return -EBUSY;
 		}
 
-		arb = kzalloc(sizeof(*arb), GFP_KERNEL);
-		if (!arb) {
+		pspat_arb = kzalloc(sizeof(*pspat_arb), GFP_KERNEL);
+		if (!pspat_arb) {
 			return -ENOMEM;
 		}
 
-		init_waitqueue_head(&arb->wqh);
-		f->private_data = arb;
+		init_waitqueue_head(&pspat_arb->wqh);
 
 #ifdef EMULATE
-		arb->emu_tmr.function = emu_tmr_cb;
-		arb->emu_tmr.data = (long unsigned)arb;
-		mod_timer(&arb->emu_tmr, jiffies + msecs_to_jiffies(1000));
+		pspat_arb->emu_tmr.function = emu_tmr_cb;
+		pspat_arb->emu_tmr.data = (long unsigned)pspat_arb;
+		mod_timer(&pspat_arb->emu_tmr, jiffies + msecs_to_jiffies(1000));
 #endif
 		/* Register the arbiter. */
 		rcu_assign_pointer(pspat_handler, pspat_client_handler);
@@ -224,7 +220,7 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 	(void) cmd;
 
 	if (blocking) {
-		add_wait_queue(&arb->wqh, &wait);
+		add_wait_queue(&pspat_arb->wqh, &wait);
 	}
 
 	for (;;) {
@@ -241,11 +237,11 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 		}
 
 		/* Invoke the arbiter. */
-		pspat_do_arbiter(arb);
+		pspat_do_arbiter(pspat_arb);
 	}
 
 	if (blocking) {
-		remove_wait_queue(&arb->wqh, &wait);
+		remove_wait_queue(&pspat_arb->wqh, &wait);
 	}
 
 	return 0;

@@ -6,6 +6,12 @@
 #include "pspat.h"
 
 static int
+pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
+{
+	return 0;
+}
+
+static int
 pspat_pending_mark(struct pspat_queue *pq)
 {
 	// XXX mark skbs in the local queue
@@ -185,29 +191,23 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	              struct net_device *dev, struct netdev_queue *txq)
 {
 	int cpu;
+	struct pspat_queue *pq;
 
 	if (pspat_debug_xmit) {
 		printk(KERN_INFO "q %p dev %p txq %p root_lock %p", q, dev, txq, qdisc_lock(q));
 	}
 
-	if (!(pspat_enable && pspat_stats)) {
+	if (!pspat_enable) {
 		/* Not our business. */
 		return -ENOTTY;
 	}
 
 	cpu = get_cpu(); /* also disables preemption */
-#if 0
-	if (/* full */) {
+	pq = pspat_arb->queues + cpu;
+	if (!pspat_cli_push(pq, skb)) {
 		pspat_stats[cpu].dropped++;
 		kfree_skb(skb);
-	} else {
-		/* save the cpu id into the skb */
-		/* push into arb->queue[cpu] */
 	}
-#else
-	pspat_stats[cpu].dropped++;
-	kfree_skb(skb);
-#endif
 	put_cpu();
 	return 0;
 }
