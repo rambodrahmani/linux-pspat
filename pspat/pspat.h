@@ -25,9 +25,15 @@ struct pspat_queue {
 	START_NEW_CACHELINE
 	uint32_t		arb_outq_tail; /* insertion point in outq  */
 	uint32_t		arb_inq_head; /* extraction point from inq */
+	uint32_t		arb_inq_ntc;  /* next to clean */
+	uint32_t		arb_cacheq_tail;
+	uint32_t		arb_cacheq_head;
+	uint32_t		arb_markq_tail;
+	uint32_t		arb_markq_head;
 	uint64_t		arb_extract_next;
 
-	struct sk_buff		*qcache[64U/sizeof(struct sk_buff *)];
+	struct sk_buff		*cacheq[PSPAT_QLEN];
+	struct sk_buff		*markq[PSPAT_QLEN];
 };
 
 struct pspat {

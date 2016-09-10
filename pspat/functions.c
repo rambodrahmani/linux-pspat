@@ -5,36 +5,71 @@
 
 #include "pspat.h"
 
+#define pspat_next(a)	do { (a)++; if (unlikely((a) >= PSPAT_QLEN)) (a) = 0; } while (0)
+
+/* push a new packet to the client queue
+ * returns -ENOBUFS if the queue is full
+ */
 static int
 pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 {
+	uint32_t tail = pq->cli_inq_tail;
+
+	if (pq->inq[tail])
+		return -ENOBUFS;
+	pq->inq[tail] = skb;
+
+	pspat_next(pq->cli_inq_tail);
+
 	return 0;
 }
 
 static int
 pspat_pending_mark(struct pspat_queue *pq)
 {
-	// XXX mark skbs in the local queue
+	// XXX we may need a counter
 	return 0;
 }
 
+/* copy new skbs from client queue to local queue */
 static void
 pspat_arb_fetch(struct pspat_queue *pq)
 {
-	// XXX copy new skbs from client queue to local queue
+	uint32_t head = pq->arb_inq_head;
+	uint32_t tail = pq->arb_cacheq_tail;
+
+	/* cacheq should always be empty at this point */
+	while (pq->inq[head]) {
+		pq->cacheq[tail] = pq->inq[head];
+		
+		pspat_next(head);
+		pspat_next(tail);
+	}
+	pq->arb_inq_head = head;
+	pq->arb_cacheq_tail = tail;
 }
 
+/* extract skb from the local queue */
 static struct sk_buff *
 pspat_arb_get_skb(struct pspat_queue *pq)
 {
-	// XXX get next skb from the local queue
-	return NULL;
+	uint32_t head = pq->arb_cacheq_head;
+	struct sk_buff *skb = pq->cacheq[head];
+	if (skb)
+		pspat_next(pq->arb_cacheq_head);
+	return skb;
 }
 
+/* locally mark skb as eligible for transmission */
 static void
 pspat_mark(struct sk_buff *skb)
 {
-	// XXX mark skb as eligible for transmission
+	struct pspat_queue *pq = pspat_arb->queues + skb->sender_cpu;
+	uint32_t tail = pq->arb_markq_tail;
+
+	pq->markq[tail] = skb;
+
+	pspat_next(pq->arb_markq_tail);
 }
 
 static uint64_t
@@ -44,16 +79,35 @@ pspat_pkt_tsc(uint32_t rate, unsigned int len)
 	return 0;
 }
 
+/* copy new skbs to the sender queue */
 static void
 pspat_arb_publish(struct pspat_queue *pq)
 {
-	// XXX copy new skbs to the sender queue
+	uint32_t head = pq->arb_markq_head;
+	uint32_t tail = pq->arb_outq_tail;
+
+	while (pq->markq[head] && !pq->outq[tail]) {
+		pq->outq[tail] = pq->markq[head];
+		
+		pspat_next(head);
+		pspat_next(tail);
+	}
+	pq->arb_markq_head = head;
+	pq->arb_outq_tail = tail;
 }
 
+/* zero out the used skbs in the client queue */
 static void
 pspat_arb_ack(struct pspat_queue *pq)
 {
-	// XXX zero out the used skbs in the client queue
+	uint32_t ntc = pq->arb_inq_ntc;
+	uint32_t head = pq->arb_inq_head;
+
+	while (ntc != head) {
+		pq->inq[ntc] = NULL;
+		pspat_next(ntc);
+	}
+	pq->arb_inq_ntc = ntc;
 }
 
 /* Function implementing the arbiter. */
@@ -81,8 +135,7 @@ pspat_do_arbiter(struct pspat *arb)
 			struct sk_buff *skb;
 			/*
 			 * Skip clients with at least one packet/burst already
-			 * in the scheduler. This is true if s_nhead != s_tail,
-			 * and is a useful optimization.
+			 * in the scheduler.
 			 */
 			if (pspat_pending_mark(pq)) {
 				continue;
