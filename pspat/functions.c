@@ -31,7 +31,10 @@ pspat_pending_mark(struct pspat_queue *pq)
 	return 0;
 }
 
-/* copy new skbs from client queue to local queue */
+/* copy new skbs from client queue to local queue
+ * There must be a call to pspat_arb_ack between
+ * any two calls to pspat_arb_fetch
+ */
 static void
 pspat_arb_fetch(struct pspat_queue *pq)
 {
