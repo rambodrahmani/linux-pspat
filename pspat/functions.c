@@ -200,8 +200,8 @@ pspat_do_arbiter(struct pspat *arb)
 		q = output_queue;
 		while (q) {
 			struct Qdisc *cq;
-			while (q->pspat_next_link_idle <= now &&
-			       ndeq < q->pspat_batch_limit)
+			ndeq = 0;
+			while (q->pspat_next_link_idle <= now /* && ndeq < q->pspat_batch_limit */)
 			{
 				struct sk_buff *skb = q->dequeue(q);
 				// XXX things to do when dequeing:
@@ -220,6 +220,7 @@ pspat_do_arbiter(struct pspat *arb)
 				pspat_mark(skb);
 				q->pspat_next_link_idle +=
 					pspat_pkt_tsc(q->pspat_rate, skb->len);
+				ndeq++;
 			}
 			cq = q;
 			q = q->next_sched;
