@@ -37,13 +37,12 @@ struct pspat_queue {
 };
 
 struct pspat {
-	struct pspat_queue	queues[8]; /* NUM CORES */
-	int			n_queues;
-
 	wait_queue_head_t wqh;
 #ifdef EMULATE
 	struct timer_list	emu_tmr;
 #endif
+	int			n_queues;
+	struct pspat_queue	queues[0];
 };
 
 extern struct pspat *pspat_arb;

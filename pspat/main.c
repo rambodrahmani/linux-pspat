@@ -209,21 +209,29 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 
 	/* Create the arbiter on demand. */
 	if (!pspat_arb) {
-		pspat_arb = kzalloc(sizeof(*pspat_arb), GFP_KERNEL);
+		int cpus = num_online_cpus();
+
+		pspat_arb = kzalloc(sizeof(*pspat_arb) +
+				    cpus * sizeof(*pspat_arb->queues),
+				    GFP_KERNEL);
 		if (!pspat_arb) {
 			return -ENOMEM;
 		}
+		pspat_arb->n_queues = cpus;
 
 		init_waitqueue_head(&pspat_arb->wqh);
 
 #ifdef EMULATE
 		pspat_arb->emu_tmr.function = emu_tmr_cb;
 		pspat_arb->emu_tmr.data = (long unsigned)pspat_arb;
-		mod_timer(&pspat_arb->emu_tmr, jiffies + msecs_to_jiffies(1000));
+		mod_timer(&pspat_arb->emu_tmr,
+			  jiffies + msecs_to_jiffies(1000));
 #endif
 		/* Register the arbiter. */
 		rcu_assign_pointer(pspat_handler, pspat_client_handler);
 		synchronize_rcu();
+		printk("Allocated arbiter with %d per-core queues\n",
+		       pspat_arb->n_queues);
 	}
 
 	(void) cmd;
