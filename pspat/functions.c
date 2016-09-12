@@ -128,7 +128,7 @@ pspat_do_arbiter(struct pspat *arb)
 	int ndeq = 0;
 	static struct Qdisc *output_queue;
 
-	printk(KERN_INFO "Arbiter woken up\n");
+	// printk(KERN_INFO "Arbiter woken up\n");
 	
 	while (!need_resched()) {
 		int i;
