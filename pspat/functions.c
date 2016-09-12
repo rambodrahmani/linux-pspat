@@ -91,8 +91,13 @@ pspat_arb_publish(struct pspat_queue *pq)
 	uint32_t head = pq->arb_markq_head;
 	uint32_t tail = pq->arb_outq_tail;
 
-	while (pq->markq[head] && !pq->outq[tail]) {
-		pq->outq[tail] = pq->markq[head];
+	while (pq->markq[head]) {
+		if (likely(pq->outq[tail] == NULL)) {
+			pq->outq[tail] = pq->markq[head];
+		} else {
+			kfree_skb(pq->markq[head]);
+			// XXX increment dropped counter
+		}
 		pq->markq[head] = NULL;
 		
 		pspat_next(head);
