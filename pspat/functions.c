@@ -189,7 +189,6 @@ pspat_do_arbiter(struct pspat *arb)
 		q = output_queue;
 		while (q) {
 			struct Qdisc *cq;
-			ndeq = 0;
 			while (q->pspat_next_link_idle <= now &&
 			       ndeq < q->pspat_batch_limit)
 			{
@@ -210,7 +209,6 @@ pspat_do_arbiter(struct pspat *arb)
 				pspat_mark(skb);
 				q->pspat_next_link_idle +=
 					pspat_pkt_tsc(q->pspat_rate, skb->len);
-				ndeq++;
 			}
 			cq = q;
 			q = q->next_sched;
@@ -224,12 +222,10 @@ pspat_do_arbiter(struct pspat *arb)
 				prevq = &q->next_sched;
 		}
 
-		if (ndeq > 0) {
-			for (i = 0; i < arb->n_queues; i++) {
-				struct pspat_queue *pq = arb->queues + i;
-				pspat_arb_publish(pq); /* to senders */
-				pspat_arb_ack(pq);     /* to clients */
-			}
+		for (i = 0; i < arb->n_queues; i++) {
+			struct pspat_queue *pq = arb->queues + i;
+			pspat_arb_publish(pq); /* to senders */
+			pspat_arb_ack(pq);     /* to clients */
 		}
 
 		rcu_read_unlock_bh();
