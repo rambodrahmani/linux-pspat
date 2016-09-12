@@ -257,7 +257,7 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 
 	cpu = get_cpu(); /* also disables preemption */
 	pq = pspat_arb->queues + cpu;
-	if (!pspat_cli_push(pq, skb)) {
+	if (pspat_cli_push(pq, skb)) {
 		pspat_stats[cpu].dropped++;
 		kfree_skb(skb);
 	}
