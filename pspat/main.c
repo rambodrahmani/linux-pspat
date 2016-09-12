@@ -161,12 +161,22 @@ pspat_open(struct inode *inode, struct file *f)
 {
 	/* Do nothing, initialization is on-demand. */
 	f->private_data = NULL;
+
+	if (instances) {
+		printk("PSPAT arbiter already exists\n");
+		return -EBUSY;
+	}
+
+	instances ++;
+
 	return 0;
 }
 
 static int
 pspat_release(struct inode *inode, struct file *f)
 {
+	instances --;
+
 	if (!pspat_arb) {
 		return 0;
 	}
@@ -180,8 +190,6 @@ pspat_release(struct inode *inode, struct file *f)
 
 	kfree(pspat_arb);
 
-	instances --;
-
 	return 0;
 }
 
@@ -193,11 +201,6 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 
 	/* Create the arbiter on demand. */
 	if (!pspat_arb) {
-		if (instances) {
-			printk("PSPAT arbiter already exists\n");
-			return -EBUSY;
-		}
-
 		pspat_arb = kzalloc(sizeof(*pspat_arb), GFP_KERNEL);
 		if (!pspat_arb) {
 			return -ENOMEM;
@@ -213,8 +216,6 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 		/* Register the arbiter. */
 		rcu_assign_pointer(pspat_handler, pspat_client_handler);
 		synchronize_rcu();
-
-		instances ++;
 	}
 
 	(void) cmd;
