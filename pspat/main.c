@@ -18,9 +18,8 @@
 #include "pspat.h"
 
 
-
-static int instances = 0; /* To be protected by a lock. */
-
+DEFINE_MUTEX(pspat_glock);
+static int instances = 0;
 struct pspat *pspat_arb;
 
 #ifdef EMULATE
@@ -162,12 +161,17 @@ pspat_open(struct inode *inode, struct file *f)
 	/* Do nothing, initialization is on-demand. */
 	f->private_data = NULL;
 
+	mutex_lock(&pspat_glock);
+
 	if (instances) {
+		mutex_unlock(&pspat_glock);
 		printk("PSPAT arbiter already exists\n");
+
 		return -EBUSY;
 	}
 
 	instances ++;
+	mutex_unlock(&pspat_glock);
 
 	return 0;
 }
@@ -175,9 +179,10 @@ pspat_open(struct inode *inode, struct file *f)
 static int
 pspat_release(struct inode *inode, struct file *f)
 {
-	instances --;
+	mutex_lock(&pspat_glock);
 
 	if (!pspat_arb) {
+		mutex_unlock(&pspat_glock);
 		return 0;
 	}
 
@@ -189,6 +194,9 @@ pspat_release(struct inode *inode, struct file *f)
 	synchronize_rcu();
 
 	kfree(pspat_arb);
+	pspat_arb = NULL;
+	instances --;
+	mutex_unlock(&pspat_glock);
 
 	return 0;
 }
