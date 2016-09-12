@@ -55,8 +55,10 @@ pspat_arb_get_skb(struct pspat_queue *pq)
 {
 	uint32_t head = pq->arb_cacheq_head;
 	struct sk_buff *skb = pq->cacheq[head];
-	if (skb)
+	if (skb) {
+		pq->cacheq[head] = NULL;
 		pspat_next(pq->arb_cacheq_head);
+	}
 	return skb;
 }
 
@@ -88,6 +90,7 @@ pspat_arb_publish(struct pspat_queue *pq)
 
 	while (pq->markq[head] && !pq->outq[tail]) {
 		pq->outq[tail] = pq->markq[head];
+		pq->markq[head] = NULL;
 		
 		pspat_next(head);
 		pspat_next(tail);
