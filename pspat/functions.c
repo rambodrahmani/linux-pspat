@@ -219,7 +219,7 @@ pspat_do_arbiter(struct pspat *arb)
 				// extract from the queue
 				*prevq = q;
 				// reset the flag
-				clear_bit(__QDISC_STATE_SCHED, &q->state);
+				clear_bit(__QDISC_STATE_SCHED, &cq->state);
 			}
 			if (q)
 				prevq = &q->next_sched;
