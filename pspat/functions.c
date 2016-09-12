@@ -66,7 +66,7 @@ pspat_arb_get_skb(struct pspat_queue *pq)
 static void
 pspat_mark(struct sk_buff *skb)
 {
-	struct pspat_queue *pq = pspat_arb->queues + skb->sender_cpu;
+	struct pspat_queue *pq = pspat_arb->queues + skb->sender_cpu - 1;
 	uint32_t tail = pq->arb_markq_tail;
 
 	pq->markq[tail] = skb;
