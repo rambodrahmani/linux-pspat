@@ -80,10 +80,10 @@ pspat_mark(struct sk_buff *skb)
 }
 
 static uint64_t
-pspat_pkt_ns(uint32_t rate, unsigned int len)
+pspat_pkt_ns(uint64_t rate, unsigned int len)
 {
 	u64 _rate = rate ? rate : pspat_rate;
-	return len * 8 * _rate * NSEC_PER_SEC;
+	return (NSEC_PER_SEC * len * 8) / _rate;
 }
 
 /* copy new skbs to the sender queue */
@@ -216,6 +216,9 @@ pspat_do_arbiter(struct pspat *arb)
 				
 				q->next_sched = output_queue;
 				output_queue = q;
+				if (q->pspat_next_link_idle == 0) {
+					q->pspat_next_link_idle = now;
+				}
 			}
 		}
 		prevq = &output_queue;
