@@ -122,6 +122,26 @@ pspat_arb_ack(struct pspat_queue *pq)
 	pq->arb_inq_ntc = ntc;
 }
 
+static void
+pspat_send(struct sk_buff *skb)
+{
+	struct net_device *dev = skb->dev;
+	struct netdev_queue *txq;
+	int ret;
+
+	txq = skb_get_tx_queue(dev, skb);
+
+	HARD_TX_LOCK(dev, txq, smp_processor_id());
+	if (!netif_xmit_frozen_or_stopped(txq))
+		skb = dev_hard_start_xmit(skb, dev, txq, &ret);
+	HARD_TX_UNLOCK(dev, txq);
+
+	if (ret == NETDEV_TX_BUSY) {
+		// XXX we should requeue into the qdisc
+		kfree_skb(skb);
+	}
+}
+
 /* Function implementing the arbiter. */
 int
 pspat_do_arbiter(struct pspat *arb)
@@ -218,7 +238,13 @@ pspat_do_arbiter(struct pspat *arb)
 
 				if (skb == NULL)
 					break;
-				pspat_mark(skb);
+				if (pspat_direct_xmit) {
+					skb = validate_xmit_skb_list(skb, skb->dev);
+					pspat_send(skb);
+				} else {
+					/* validation is done in the sender threads */
+					pspat_mark(skb);
+				}
 				q->pspat_next_link_idle +=
 					pspat_pkt_ns(q->pspat_rate, skb->len);
 				ndeq++;
@@ -252,7 +278,7 @@ int
 pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	              struct net_device *dev, struct netdev_queue *txq)
 {
-	int cpu;
+	int cpu, rc = NET_XMIT_SUCCESS;
 	struct pspat_queue *pq;
 
 	if (pspat_debug_xmit) {
@@ -263,14 +289,15 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 		/* Not our business. */
 		return -ENOTTY;
 	}
-
+	qdisc_calculate_pkt_len(skb, q);
 	cpu = get_cpu(); /* also disables preemption */
 	pq = pspat_arb->queues + cpu;
 	if (pspat_cli_push(pq, skb)) {
 		pspat_stats[cpu].dropped++;
 		kfree_skb(skb);
+		rc = NET_XMIT_DROP;
 	}
 	put_cpu();
-	return 0;
+	return rc;
 }
 
