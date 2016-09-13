@@ -1,6 +1,6 @@
 config PSPAT
-	tristate "PSPAT packet scheduler"
+	bool "PSPAT packet scheduler"
 	depends on NET_RX_BUSY_POLL || XPS
 	default n
 	---help---
-	  Create the pspat.ko module.
+	  Compile in the PSPAT packet scheduler.

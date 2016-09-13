@@ -143,11 +143,13 @@
 
 #include "net-sysfs.h"
 
+#ifdef CONFIG_PSPAT
 typedef int (*pspat_handler_t)(struct sk_buff *, struct Qdisc *,
 				 struct net_device *,
 				 struct netdev_queue *);
 pspat_handler_t pspat_handler;
 EXPORT_SYMBOL(pspat_handler);
+#endif /* CONFIG_PSPAT */
 
 /* Instead of increasing this, you should create a hash table. */
 #define MAX_GRO_SKBS 8
@@ -3331,9 +3333,11 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
 
 	trace_net_dev_queue(skb);
 	if (q->enqueue) {
+#ifdef CONFIG_PSPAT
 		pspat_handler_t h = rcu_dereference_bh(pspat_handler);
 		rc = h ? h(skb, q, dev, txq) : -ENOTTY;
 		if (rc == -ENOTTY)
+#endif /* CONFIG_PSPAT */
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
 	}
