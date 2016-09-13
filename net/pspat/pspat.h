@@ -30,7 +30,7 @@ struct pspat_queue {
 	uint32_t		arb_cacheq_head;
 	uint32_t		arb_markq_tail;
 	uint32_t		arb_markq_head;
-	uint64_t		arb_extract_next;
+	s64			arb_extract_next;
 
 	struct sk_buff		*cacheq[PSPAT_QLEN];
 	struct sk_buff		*markq[PSPAT_QLEN];
@@ -54,7 +54,7 @@ int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 
 extern int pspat_enable;
 extern int pspat_debug_xmit;
-extern uint64_t pspat_arb_interval_tsc;
+extern s64 pspat_arb_interval_ns;
 extern struct pspat_stats *pspat_stats;
 
 struct pspat_stats {

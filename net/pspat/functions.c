@@ -72,16 +72,17 @@ pspat_mark(struct sk_buff *skb)
 	struct pspat_queue *pq = pspat_arb->queues + skb->sender_cpu - 1;
 	uint32_t tail = pq->arb_markq_tail;
 
+	BUG_ON(skb->sender_cpu == 0);
+
 	pq->markq[tail] = skb;
 
 	pspat_next(pq->arb_markq_tail);
 }
 
 static uint64_t
-pspat_pkt_tsc(uint32_t rate, unsigned int len)
+pspat_pkt_ns(uint32_t rate, unsigned int len)
 {
-	// XXX
-	return 0;
+	return len * 8 * rate * NSEC_PER_SEC;
 }
 
 /* copy new skbs to the sender queue */
@@ -132,7 +133,7 @@ pspat_do_arbiter(struct pspat *arb)
 	
 	while (!need_resched()) {
 		int i;
-		uint64_t now = rdtsc();
+		s64 now = ktime_get_ns();
 		struct Qdisc **prevq, *q;
 
 		rcu_read_lock_bh();
@@ -155,7 +156,7 @@ pspat_do_arbiter(struct pspat *arb)
 			if (now < pq->arb_extract_next) {
 				continue;
 			}
-			pq->arb_extract_next = now + pspat_arb_interval_tsc;
+			pq->arb_extract_next = now + pspat_arb_interval_ns;
 
 			/* 
 			 * copy the new skbs from pq to our local cache.
@@ -219,7 +220,7 @@ pspat_do_arbiter(struct pspat *arb)
 					break;
 				pspat_mark(skb);
 				q->pspat_next_link_idle +=
-					pspat_pkt_tsc(q->pspat_rate, skb->len);
+					pspat_pkt_ns(q->pspat_rate, skb->len);
 				ndeq++;
 			}
 			cq = q;

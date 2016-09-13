@@ -88,7 +88,7 @@ struct Qdisc {
 	struct Qdisc		*next_sched;
 	struct sk_buff		*gso_skb;
 	/* pspat fields */
-	uint64_t		pspat_next_link_idle;
+	s64			pspat_next_link_idle;
 	uint32_t		pspat_batch_limit;
 	uint32_t		pspat_rate;
 	/*
