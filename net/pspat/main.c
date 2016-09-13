@@ -36,6 +36,7 @@ emu_tmr_cb(long unsigned arg)
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
 int pspat_direct_xmit = 1;
+u64 pspat_rate = 1000000000; // 1Gb/s
 s64 pspat_arb_interval_ns = 1000;
 u32 pspat_arb_batch_limit = 40;
 static int pspat_zero = 0;
@@ -90,6 +91,15 @@ static struct ctl_table pspat_static_ctl[] = {
 		.mode		= 0644,
 		.data		= &pspat_arb_batch_limit,
 		.proc_handler	= &proc_dointvec,
+	},
+	{
+		.procname	= "rate",
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.data		= &pspat_rate,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
 	},
 	{}
 };

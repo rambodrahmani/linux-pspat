@@ -82,7 +82,8 @@ pspat_mark(struct sk_buff *skb)
 static uint64_t
 pspat_pkt_ns(uint32_t rate, unsigned int len)
 {
-	return len * 8 * rate * NSEC_PER_SEC;
+	u64 _rate = rate ? rate : pspat_rate;
+	return len * 8 * _rate * NSEC_PER_SEC;
 }
 
 /* copy new skbs to the sender queue */

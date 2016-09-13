@@ -55,6 +55,7 @@ int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 extern int pspat_enable;
 extern int pspat_debug_xmit;
 extern int pspat_direct_xmit;
+extern u64 pspat_rate;
 extern s64 pspat_arb_interval_ns;
 extern struct pspat_stats *pspat_stats;
 

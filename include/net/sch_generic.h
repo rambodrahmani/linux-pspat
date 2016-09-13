@@ -89,8 +89,8 @@ struct Qdisc {
 	struct sk_buff		*gso_skb;
 #ifdef CONFIG_PSPAT
 	s64			pspat_next_link_idle;
+	u64			pspat_rate;
 	uint32_t		pspat_batch_limit;
-	uint32_t		pspat_rate;
 #endif /* CONFIG_PSPAT */
 	/*
 	 * For performance sake on SMP, we put highly modified fields at the end
