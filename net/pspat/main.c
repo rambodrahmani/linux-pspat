@@ -36,8 +36,8 @@ emu_tmr_cb(long unsigned arg)
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
 int pspat_direct_xmit = 1;
-s64 pspat_arb_interval_ns = 1000000000; // XXX make this a sysctl
-u32 pspat_arb_batch_limit = 40; 	// XXX make this a sysctl
+s64 pspat_arb_interval_ns = 1000;
+u32 pspat_arb_batch_limit = 40;
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static unsigned long pspat_ulongzero = 0UL;
@@ -67,6 +67,29 @@ static struct ctl_table pspat_static_ctl[] = {
 		.proc_handler	= &proc_dointvec_minmax,
 		.extra1		= &pspat_zero,
 		.extra2		= &pspat_one,
+	},
+	{
+		.procname	= "direct_xmit",
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.data		= &pspat_direct_xmit,
+		.proc_handler	= &proc_dointvec_minmax,
+		.extra1		= &pspat_zero,
+		.extra2		= &pspat_one,
+	},
+	{
+		.procname	= "arb_interval_ns",
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.data		= &pspat_arb_interval_ns,
+		.proc_handler	= &proc_dointvec,
+	},
+	{
+		.procname	= "arb_batch_limit",
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.data		= &pspat_arb_batch_limit,
+		.proc_handler	= &proc_dointvec,
 	},
 	{}
 };
