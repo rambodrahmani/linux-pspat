@@ -149,10 +149,11 @@ pspat_do_arbiter(struct pspat *arb)
 {
 	int ndeq = 0;
 	static struct Qdisc *output_queue;
+	unsigned int j = jiffies;
 
 	// printk(KERN_INFO "Arbiter woken up\n");
 	
-	while (!need_resched()) {
+	while (!need_resched() && jiffies < j + msecs_to_jiffies(1000)) {
 		int i;
 		s64 now = ktime_get_ns();
 		struct Qdisc **prevq, *q;
