@@ -19,7 +19,6 @@
 
 
 DEFINE_MUTEX(pspat_glock);
-static int instances = 0;
 struct pspat *pspat_arb;
 
 #ifdef EMULATE
@@ -195,41 +194,84 @@ pspat_open(struct inode *inode, struct file *f)
 	/* Do nothing, initialization is on-demand. */
 	f->private_data = NULL;
 
-	mutex_lock(&pspat_glock);
-
-	if (instances) {
-		mutex_unlock(&pspat_glock);
-		printk("PSPAT arbiter already exists\n");
-
-		return -EBUSY;
-	}
-
-	instances ++;
-	mutex_unlock(&pspat_glock);
-
 	return 0;
 }
 
 static int
 pspat_release(struct inode *inode, struct file *f)
 {
-	mutex_lock(&pspat_glock);
-
-	if (!pspat_arb) {
-		mutex_unlock(&pspat_glock);
+	if (!f->private_data) {
+		/* Nothing was created, nothing to destroy. */
 		return 0;
 	}
 
+	if (f->private_data == pspat_arb) {
+		/* Destroy arbiter. */
+		mutex_lock(&pspat_glock);
 #ifdef EMULATE
-	del_timer_sync(&pspat_arb->emu_tmr);
+		del_timer_sync(&pspat_arb->emu_tmr);
 #endif
-	/* Unregister the arbiter. */
-	rcu_assign_pointer(pspat_handler, NULL);
-	synchronize_rcu();
+		/* Unregister the arbiter. */
+		rcu_assign_pointer(pspat_handler, NULL);
+		synchronize_rcu();
 
-	kfree(pspat_arb);
-	pspat_arb = NULL;
-	instances --;
+		kfree(pspat_arb);
+		pspat_arb = NULL;
+		f->private_data = NULL;
+		mutex_unlock(&pspat_glock);
+		printk("PSPAT arbiter destroyed\n");
+
+	} else {
+		/* Destroy transmitter. */
+	}
+
+	return 0;
+}
+
+static int
+pspat_create(struct file *f, unsigned int cmd)
+{
+	int cpus = num_online_cpus();
+
+	if (cmd < cpus) {
+		/* Create a transmitter thread. */
+		f->private_data = f;
+		return 0;
+	}
+
+	/* Create the arbiter on demand. */
+	mutex_lock(&pspat_glock);
+	if (pspat_arb) {
+		mutex_unlock(&pspat_glock);
+		printk("PSPAT arbiter already exists\n");
+
+		return -EBUSY;
+	}
+
+	pspat_arb = kzalloc(sizeof(*pspat_arb) +
+			    cpus * sizeof(*pspat_arb->queues),
+			    GFP_KERNEL);
+	if (!pspat_arb) {
+		mutex_unlock(&pspat_glock);
+		return -ENOMEM;
+	}
+	f->private_data = pspat_arb;
+	pspat_arb->n_queues = cpus;
+
+	init_waitqueue_head(&pspat_arb->wqh);
+
+#ifdef EMULATE
+	pspat_arb->emu_tmr.function = emu_tmr_cb;
+	pspat_arb->emu_tmr.data = (long unsigned)pspat_arb;
+	mod_timer(&pspat_arb->emu_tmr,
+		  jiffies + msecs_to_jiffies(1000));
+#endif
+	/* Register the arbiter. */
+	rcu_assign_pointer(pspat_handler, pspat_client_handler);
+	synchronize_rcu();
+	printk("PSPAT arbiter created with %d per-core queues\n",
+	       pspat_arb->n_queues);
+
 	mutex_unlock(&pspat_glock);
 
 	return 0;
@@ -241,34 +283,14 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 	DECLARE_WAITQUEUE(wait, current);
 	bool blocking = false;
 
-	/* Create the arbiter on demand. */
-	if (!pspat_arb) {
-		int cpus = num_online_cpus();
+	if (f->private_data == NULL) {
+		/* We need to create something on demand. */
+		int ret = pspat_create(f, cmd);
 
-		pspat_arb = kzalloc(sizeof(*pspat_arb) +
-				    cpus * sizeof(*pspat_arb->queues),
-				    GFP_KERNEL);
-		if (!pspat_arb) {
-			return -ENOMEM;
+		if (ret) {
+			return ret;
 		}
-		pspat_arb->n_queues = cpus;
-
-		init_waitqueue_head(&pspat_arb->wqh);
-
-#ifdef EMULATE
-		pspat_arb->emu_tmr.function = emu_tmr_cb;
-		pspat_arb->emu_tmr.data = (long unsigned)pspat_arb;
-		mod_timer(&pspat_arb->emu_tmr,
-			  jiffies + msecs_to_jiffies(1000));
-#endif
-		/* Register the arbiter. */
-		rcu_assign_pointer(pspat_handler, pspat_client_handler);
-		synchronize_rcu();
-		printk("Allocated arbiter with %d per-core queues\n",
-		       pspat_arb->n_queues);
 	}
-
-	(void) cmd;
 
 	if (blocking) {
 		add_wait_queue(&pspat_arb->wqh, &wait);
@@ -287,8 +309,10 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 			break;
 		}
 
-		/* Invoke the arbiter. */
-		pspat_do_arbiter(pspat_arb);
+		if (f->private_data == pspat_arb) {
+			/* Invoke the arbiter. */
+			pspat_do_arbiter(pspat_arb);
+		}
 	}
 
 	if (blocking) {
