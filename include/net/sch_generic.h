@@ -91,7 +91,6 @@ struct Qdisc {
 	int			pspat_owned;
 	struct Qdisc	       *pspat_next;
 	s64			pspat_next_link_idle;
-	u64			pspat_rate;
 	uint32_t		pspat_batch_limit;
 #endif /* CONFIG_PSPAT */
 	/*
