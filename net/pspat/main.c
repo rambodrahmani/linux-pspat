@@ -83,7 +83,9 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(s64),
 		.mode		= 0644,
 		.data		= &pspat_arb_interval_ns,
-		.proc_handler	= &proc_dointvec,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
 	},
 	{
 		.procname	= "arb_batch_limit",
