@@ -244,6 +244,9 @@ pspat_do_arbiter(struct pspat *arb)
 
 				if (skb == NULL)
 					break;
+				q->pspat_next_link_idle +=
+					pspat_pkt_pico(pspat_rate, skb->len);
+				ndeq++;
 				BUG_ON(!skb->sender_cpu);
 			        pq = pspat_arb->queues + skb->sender_cpu - 1;
 				pq->arb_pending--;
@@ -254,9 +257,6 @@ pspat_do_arbiter(struct pspat *arb)
 					/* validation is done in the sender threads */
 					pspat_mark(pq, skb);
 				}
-				q->pspat_next_link_idle +=
-					pspat_pkt_pico(pspat_rate, skb->len);
-				ndeq++;
 			}
 		}
 
