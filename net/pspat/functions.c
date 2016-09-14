@@ -24,13 +24,6 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 	return 0;
 }
 
-static int
-pspat_pending_mark(struct pspat_queue *pq)
-{
-	// XXX we may need a counter
-	return 0;
-}
-
 /* copy new skbs from client queue to local queue
  * There must be a call to pspat_arb_ack between
  * any two calls to pspat_arb_fetch
@@ -67,9 +60,8 @@ pspat_arb_get_skb(struct pspat_queue *pq)
 
 /* locally mark skb as eligible for transmission */
 static void
-pspat_mark(struct sk_buff *skb)
+pspat_mark(struct pspat_queue *pq, struct sk_buff *skb)
 {
-	struct pspat_queue *pq = pspat_arb->queues + skb->sender_cpu - 1;
 	uint32_t tail = pq->arb_markq_tail;
 
 	BUG_ON(skb->sender_cpu == 0);
@@ -169,9 +161,8 @@ pspat_do_arbiter(struct pspat *arb)
 			 * Skip clients with at least one packet/burst already
 			 * in the scheduler.
 			 */
-			if (pspat_pending_mark(pq)) {
+			if (pq->arb_pending)
 				continue;
-			}
 
 			if (now < pq->arb_extract_next) {
 				continue;
@@ -227,6 +218,7 @@ pspat_do_arbiter(struct pspat *arb)
 					 */
 					continue;
 				}
+				pq->arb_pending++;
 			}
 		}
 		for (q = arb->qdiscs; q; q = q->pspat_next) {
@@ -235,6 +227,7 @@ pspat_do_arbiter(struct pspat *arb)
 			while (q->pspat_next_link_idle <= now &&
 				ndeq < q->pspat_batch_limit)
 		       	{
+				struct pspat_queue *pq;
 				struct sk_buff *skb = q->dequeue(q);
 				// XXX things to do when dequeing:
 				// - q->gso_skb may contain a "requeued"
@@ -249,12 +242,15 @@ pspat_do_arbiter(struct pspat *arb)
 
 				if (skb == NULL)
 					break;
+				BUG_ON(!skb->sender_cpu);
+			        pq = pspat_arb->queues + skb->sender_cpu - 1;
+				pq->arb_pending--;
 				if (pspat_direct_xmit) {
 					skb = validate_xmit_skb_list(skb, skb->dev);
 					pspat_send(skb);
 				} else {
 					/* validation is done in the sender threads */
-					pspat_mark(skb);
+					pspat_mark(pq, skb);
 				}
 				q->pspat_next_link_idle +=
 					pspat_pkt_ns(q->pspat_rate, skb->len);
