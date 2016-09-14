@@ -42,6 +42,7 @@ u32 pspat_qdisc_batch_limit = 40;
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static unsigned long pspat_ulongzero = 0UL;
+static unsigned long pspat_ulongone = 1UL;
 static unsigned long pspat_ulongmax = (unsigned long)-1;
 static struct ctl_table_header *pspat_sysctl_hdr;
 
@@ -107,7 +108,7 @@ static struct ctl_table pspat_static_ctl[] = {
 		.mode		= 0644,
 		.data		= &pspat_rate,
 		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
+		.extra1		= &pspat_ulongone,
 		.extra2		= &pspat_ulongmax,
 	},
 	{}
