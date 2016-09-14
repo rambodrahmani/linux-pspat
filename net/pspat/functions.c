@@ -128,7 +128,7 @@ pspat_send(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
 	struct netdev_queue *txq;
-	int ret;
+	int ret = NETDEV_TX_BUSY;
 
 	txq = skb_get_tx_queue(dev, skb);
 
