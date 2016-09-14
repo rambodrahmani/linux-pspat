@@ -206,7 +206,6 @@ pspat_do_arbiter(struct pspat *arb)
 					/* XXX temporary workaround to set
 					 * the per-Qdisc parameters
 					 */
-					q->pspat_rate = pspat_rate;
 					q->pspat_batch_limit = pspat_qdisc_batch_limit;
 				}
 				rc = q->enqueue(skb, q) & NET_XMIT_MASK;
@@ -252,7 +251,7 @@ pspat_do_arbiter(struct pspat *arb)
 					pspat_mark(pq, skb);
 				}
 				q->pspat_next_link_idle +=
-					pspat_pkt_pico(q->pspat_rate, skb->len);
+					pspat_pkt_pico(pspat_rate, skb->len);
 				ndeq++;
 			}
 		}
