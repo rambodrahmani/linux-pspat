@@ -122,6 +122,15 @@ static struct ctl_table pspat_root[] = {
 	{}
 };
 
+static struct ctl_table pspat_parent[] = {
+	{
+		.procname	= "net",
+		.mode		= 0444,
+		.child		= pspat_root,
+	},
+	{}
+};
+
 struct pspat_stats *pspat_stats;
 
 static int
@@ -170,7 +179,7 @@ pspat_sysctl_init(void)
 		t->extra2	= &pspat_ulongmax;
 	}
 	pspat_static_ctl[0].child = leaves;
-	pspat_sysctl_hdr = register_sysctl_table(pspat_root);
+	pspat_sysctl_hdr = register_sysctl_table(pspat_parent);
 
 	return 0;
 
