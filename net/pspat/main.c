@@ -320,7 +320,7 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 		/* Wait for a notification or a signal. */
 		if (need_resched()) {
 			current->state = TASK_INTERRUPTIBLE;
-			//schedule_timeout(1);
+			schedule_timeout(1);
 			current->state = TASK_RUNNING;
 		}
 
