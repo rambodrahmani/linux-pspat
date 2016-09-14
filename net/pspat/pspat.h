@@ -38,6 +38,7 @@ struct pspat_queue {
 
 struct pspat {
 	wait_queue_head_t wqh;
+	struct Qdisc	       *qdiscs;
 #ifdef EMULATE
 	struct timer_list	emu_tmr;
 #endif
@@ -51,12 +52,14 @@ int pspat_do_arbiter(struct pspat *arb);
 
 int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	              struct net_device *dev, struct netdev_queue *txq);
+void pspat_shutdown(struct pspat *arb);
 
 extern int pspat_enable;
 extern int pspat_debug_xmit;
 extern int pspat_direct_xmit;
 extern u64 pspat_rate;
 extern s64 pspat_arb_interval_ns;
+extern uint32_t pspat_qdisc_batch_limit;
 extern struct pspat_stats *pspat_stats;
 
 struct pspat_stats {

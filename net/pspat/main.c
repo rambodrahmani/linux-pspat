@@ -38,6 +38,7 @@ int pspat_direct_xmit = 1;
 u64 pspat_rate = 1000000000; // 1Gb/s
 s64 pspat_arb_interval_ns = 1000;
 u32 pspat_arb_batch_limit = 40;
+u32 pspat_qdisc_batch_limit = 40;
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static unsigned long pspat_ulongzero = 0UL;
@@ -89,6 +90,13 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(u32),
 		.mode		= 0644,
 		.data		= &pspat_arb_batch_limit,
+		.proc_handler	= &proc_dointvec,
+	},
+	{
+		.procname	= "qdisc_batch_limit",
+		.maxlen		= sizeof(u32),
+		.mode		= 0644,
+		.data		= &pspat_qdisc_batch_limit,
 		.proc_handler	= &proc_dointvec,
 	},
 	{
@@ -318,6 +326,8 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 	if (blocking) {
 		remove_wait_queue(&pspat_arb->wqh, &wait);
 	}
+
+	pspat_shutdown(pspat_arb);
 
 	return 0;
 }

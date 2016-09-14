@@ -147,8 +147,6 @@ pspat_send(struct sk_buff *skb)
 int
 pspat_do_arbiter(struct pspat *arb)
 {
-	int ndeq = 0;
-	static struct Qdisc *output_queue;
 	unsigned int j = jiffies;
 
 	// printk(KERN_INFO "Arbiter woken up\n");
@@ -156,7 +154,7 @@ pspat_do_arbiter(struct pspat *arb)
 	while (!need_resched() && jiffies < j + msecs_to_jiffies(1000)) {
 		int i;
 		s64 now = ktime_get_ns();
-		struct Qdisc **prevq, *q;
+		struct Qdisc *q;
 
 		rcu_read_lock_bh();
 
@@ -188,7 +186,6 @@ pspat_do_arbiter(struct pspat *arb)
 			while ( (skb = pspat_arb_get_skb(pq)) ) {
 				struct net_device *dev = skb->dev;
 				struct netdev_queue *txq;
-				struct Qdisc *q;
 				int rc;
 
 				/* 
@@ -198,6 +195,30 @@ pspat_do_arbiter(struct pspat *arb)
 				txq = skb_get_tx_queue(dev, skb);
 
 				q = rcu_dereference_bh(txq->qdisc);
+				if (unlikely(!q->pspat_owned)) {
+					/* it is the first time we see this Qdisc,
+					 * let us try to steal it from the system
+					 */
+					if (test_and_set_bit(__QDISC_STATE_SCHED,
+								&q->state)) {
+						/* already scheduled, we need to skip it */
+						continue;
+					}
+					/* add to the list of all the Qdiscs we serve
+					 * and initialize the PSPAT-specific fields.
+					 * We leave __QDISC_STATE_SCHED set to trick
+					 * the system into ignoring the Qdisc
+					 */
+					q->pspat_owned = 1;
+					q->pspat_next = arb->qdiscs;
+					arb->qdiscs = q;
+					q->pspat_next_link_idle = now;
+					/* XXX temporary workaround to set
+					 * the per-Qdisc parameters
+					 */
+					q->pspat_rate = pspat_rate;
+					q->pspat_batch_limit = pspat_qdisc_batch_limit;
+				}
 				rc = q->enqueue(skb, q) & NET_XMIT_MASK;
 				if (unlikely(rc)) {
 					/* enqueue frees the skb by itself
@@ -206,29 +227,14 @@ pspat_do_arbiter(struct pspat *arb)
 					 */
 					continue;
 				}
-				// XXX maybe there is no need for atomicity
-				if (test_and_set_bit(__QDISC_STATE_SCHED,
-							&q->state)) {
-					/* we have alredy scheduled this Qdisc
-					 * for transmission
-					 */
-					continue;
-				}
-				
-				q->next_sched = output_queue;
-				output_queue = q;
-				if (q->pspat_next_link_idle == 0) {
-					q->pspat_next_link_idle = now;
-				}
 			}
 		}
-		prevq = &output_queue;
-		q = output_queue;
-		while (q) {
-			struct Qdisc *cq;
-			ndeq = 0;
-			while (q->pspat_next_link_idle <= now /* && ndeq < q->pspat_batch_limit */)
-			{
+		for (q = arb->qdiscs; q; q = q->pspat_next) {
+			int ndeq = 0;
+
+			while (q->pspat_next_link_idle <= now &&
+				ndeq < q->pspat_batch_limit)
+		       	{
 				struct sk_buff *skb = q->dequeue(q);
 				// XXX things to do when dequeing:
 				// - q->gso_skb may contain a "requeued"
@@ -254,16 +260,6 @@ pspat_do_arbiter(struct pspat *arb)
 					pspat_pkt_ns(q->pspat_rate, skb->len);
 				ndeq++;
 			}
-			cq = q;
-			q = q->next_sched;
-			if (!qdisc_qlen(cq)) {
-				// extract from the queue
-				*prevq = q;
-				// reset the flag
-				clear_bit(__QDISC_STATE_SCHED, &cq->state);
-			}
-			if (q)
-				prevq = &q->next_sched;
 		}
 
 		for (i = 0; i < arb->n_queues; i++) {
@@ -275,9 +271,20 @@ pspat_do_arbiter(struct pspat *arb)
 		rcu_read_unlock_bh();
 	}
 
-	return ndeq;
+	return 0;
 }
 
+void
+pspat_shutdown(struct pspat *arb)
+{
+	struct Qdisc *q, **pq;
+
+	for (pq = &arb->qdiscs, q = *pq; q; pq = &q->pspat_next, q = *pq) {
+		BUG_ON(!test_and_clear_bit(__QDISC_STATE_SCHED, &q->state));
+		q->pspat_owned = 0;
+		*pq = NULL;
+	}
+}
 
 int
 pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
