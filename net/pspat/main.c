@@ -35,7 +35,7 @@ emu_tmr_cb(long unsigned arg)
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
 int pspat_direct_xmit = 1;
-u64 pspat_rate = 1000000000; // 1Gb/s
+u64 pspat_rate = 40000000000; // 40Gb/s
 s64 pspat_arb_interval_ns = 1000;
 u32 pspat_arb_batch_limit = 40;
 u32 pspat_qdisc_batch_limit = 40;
@@ -332,6 +332,9 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 		if (f->private_data == pspat_arb) {
 			/* Invoke the arbiter. */
 			pspat_do_arbiter(pspat_arb);
+		} else {
+			/* Invoke the transmitter. */
+			pspat_do_sender(pspat_arb);
 		}
 	}
 

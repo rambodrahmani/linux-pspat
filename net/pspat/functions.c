@@ -33,6 +33,7 @@ pspat_arb_fetch(struct pspat_queue *pq)
 {
 	uint32_t head = pq->arb_inq_head;
 	uint32_t tail = pq->arb_cacheq_tail;
+	uint32_t head_first = head;
 
 	/* cacheq should always be empty at this point */
 	while (pq->inq[head]) {
@@ -40,6 +41,9 @@ pspat_arb_fetch(struct pspat_queue *pq)
 		
 		pspat_next(head);
 		pspat_next(tail);
+		if (unlikely(head == head_first)) {
+			break;
+		}
 	}
 	pq->arb_inq_head = head;
 	pq->arb_cacheq_tail = tail;
@@ -307,3 +311,9 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	return rc;
 }
 
+/* Function implementing the arbiter. */
+int
+pspat_do_sender(struct pspat *arb)
+{
+	return 0;
+}

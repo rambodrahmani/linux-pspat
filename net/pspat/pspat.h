@@ -16,8 +16,7 @@ struct pspat_queue {
 	uint32_t		cli_inq_tail; /* insertion point in inq  */
 	uint32_t		cli_outq_head; /* extraction point from outq */
 
-	/* Output queue and s_head index, written by the arbiter,
-	 * read by clients. */
+	/* Output queue, written by the arbiter, read by senders. */
 	START_NEW_CACHELINE
 	struct sk_buff		*outq[PSPAT_QLEN];
 
@@ -35,6 +34,10 @@ struct pspat_queue {
 
 	struct sk_buff		*cacheq[PSPAT_QLEN];
 	struct sk_buff		*markq[PSPAT_QLEN];
+
+	/* Data structures private to the sender. */
+	START_NEW_CACHELINE
+	uint32_t		snd_outq_head; /* extraction point from outq  */
 };
 
 struct pspat {
@@ -54,6 +57,8 @@ int pspat_do_arbiter(struct pspat *arb);
 int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	              struct net_device *dev, struct netdev_queue *txq);
 void pspat_shutdown(struct pspat *arb);
+
+int pspat_do_sender(struct pspat *arb);
 
 extern int pspat_enable;
 extern int pspat_debug_xmit;
