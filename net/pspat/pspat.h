@@ -31,6 +31,7 @@ struct pspat_queue {
 	uint32_t		arb_markq_head;
 	s64			arb_extract_next;
 	uint32_t		arb_pending; /* packets in the Qdisc */
+	int			arb_inq_full;
 
 	struct sk_buff		*cacheq[PSPAT_QLEN];
 	struct sk_buff		*markq[PSPAT_QLEN];

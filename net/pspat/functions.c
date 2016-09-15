@@ -42,6 +42,7 @@ pspat_arb_fetch(struct pspat_queue *pq)
 		pspat_next(head);
 		pspat_next(tail);
 		if (unlikely(head == head_first)) {
+			pq->arb_inq_full = 1;
 			break;
 		}
 	}
@@ -111,9 +112,10 @@ pspat_arb_ack(struct pspat_queue *pq)
 	uint32_t ntc = pq->arb_inq_ntc;
 	uint32_t head = pq->arb_inq_head;
 
-	while (ntc != head) {
+	while (ntc != head || pq->arb_inq_full) {
 		pq->inq[ntc] = NULL;
 		pspat_next(ntc);
+		pq->arb_inq_full = 0;
 	}
 	pq->arb_inq_ntc = ntc;
 }
