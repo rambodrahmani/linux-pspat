@@ -226,25 +226,28 @@ pspat_release(struct inode *inode, struct file *f)
 		return 0;
 	}
 
+	mutex_lock(&pspat_glock);
 	if (f->private_data == pspat_arb) {
 		/* Destroy arbiter. */
-		mutex_lock(&pspat_glock);
-#ifdef EMULATE
-		del_timer_sync(&pspat_arb->emu_tmr);
-#endif
+		struct pspat *arb = pspat_arb;
+
 		/* Unregister the arbiter. */
-		rcu_assign_pointer(pspat_handler, NULL);
+		rcu_assign_pointer(pspat_arb, NULL);
 		synchronize_rcu();
 
-		kfree(pspat_arb);
-		pspat_arb = NULL;
+		pspat_shutdown(arb);
+#ifdef EMULATE
+		del_timer_sync(&arb->emu_tmr);
+#endif
+		kfree(arb);
+
 		f->private_data = NULL;
-		mutex_unlock(&pspat_glock);
 		printk("PSPAT arbiter destroyed\n");
 
 	} else {
 		/* Destroy transmitter. */
 	}
+	mutex_unlock(&pspat_glock);
 
 	return 0;
 }
@@ -253,6 +256,7 @@ static int
 pspat_create(struct file *f, unsigned int cmd)
 {
 	int cpus = num_online_cpus();
+	struct pspat *arb;
 
 	if (cmd < cpus) {
 		/* Create a transmitter thread. */
@@ -269,29 +273,29 @@ pspat_create(struct file *f, unsigned int cmd)
 		return -EBUSY;
 	}
 
-	pspat_arb = kzalloc(sizeof(*pspat_arb) +
-			    cpus * sizeof(*pspat_arb->queues),
+	arb = kzalloc(sizeof(*arb) +
+			    cpus * sizeof(*arb->queues),
 			    GFP_KERNEL);
-	if (!pspat_arb) {
+	if (!arb) {
 		mutex_unlock(&pspat_glock);
 		return -ENOMEM;
 	}
-	f->private_data = pspat_arb;
-	pspat_arb->n_queues = cpus;
+	f->private_data = arb;
+	arb->n_queues = cpus;
 
-	init_waitqueue_head(&pspat_arb->wqh);
+	init_waitqueue_head(&arb->wqh);
 
 #ifdef EMULATE
-	pspat_arb->emu_tmr.function = emu_tmr_cb;
-	pspat_arb->emu_tmr.data = (long unsigned)pspat_arb;
-	mod_timer(&pspat_arb->emu_tmr,
+	arb->emu_tmr.function = emu_tmr_cb;
+	arb->emu_tmr.data = (long unsigned)arb;
+	mod_timer(&arb->emu_tmr,
 		  jiffies + msecs_to_jiffies(1000));
 #endif
 	/* Register the arbiter. */
-	rcu_assign_pointer(pspat_handler, pspat_client_handler);
+	rcu_assign_pointer(pspat_arb, arb);
 	synchronize_rcu();
 	printk("PSPAT arbiter created with %d per-core queues\n",
-	       pspat_arb->n_queues);
+	       arb->n_queues);
 
 	mutex_unlock(&pspat_glock);
 
@@ -342,8 +346,6 @@ pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
 	if (blocking) {
 		remove_wait_queue(&pspat_arb->wqh, &wait);
 	}
-
-	pspat_shutdown(pspat_arb);
 
 	return 0;
 }

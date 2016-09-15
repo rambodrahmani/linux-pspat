@@ -287,7 +287,9 @@ pspat_shutdown(struct pspat *arb)
 	struct Qdisc *q, **pq;
 
 	for (pq = &arb->qdiscs, q = *pq; q; pq = &q->pspat_next, q = *pq) {
-		BUG_ON(!test_and_clear_bit(__QDISC_STATE_SCHED, &q->state));
+		if (!test_and_clear_bit(__QDISC_STATE_SCHED, &q->state)) {
+			BUG_ON(1);
+		}
 		q->pspat_owned = 0;
 		*pq = NULL;
 	}
@@ -299,18 +301,20 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 {
 	int cpu, rc = NET_XMIT_SUCCESS;
 	struct pspat_queue *pq;
+	struct pspat *arb = rcu_dereference(pspat_arb);
 
-	if (pspat_debug_xmit) {
+	if (0 && pspat_debug_xmit) {
 		printk(KERN_INFO "q %p dev %p txq %p root_lock %p", q, dev, txq, qdisc_lock(q));
 	}
 
-	if (!pspat_enable) {
+	if (!(pspat_enable && arb)) {
 		/* Not our business. */
 		return -ENOTTY;
 	}
+
 	qdisc_calculate_pkt_len(skb, q);
 	cpu = get_cpu(); /* also disables preemption */
-	pq = pspat_arb->queues + cpu;
+	pq = arb->queues + cpu;
 	if (pspat_cli_push(pq, skb)) {
 		pspat_stats[cpu].dropped++;
 		kfree_skb(skb);
