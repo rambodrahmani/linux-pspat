@@ -195,17 +195,26 @@ pspat_do_arbiter(struct pspat *arb)
 
 				q = rcu_dereference_bh(txq->qdisc);
 				if (unlikely(!q->pspat_owned)) {
+					int can_steal;
 					/* it is the first time we see this Qdisc,
 					 * let us try to steal it from the system
 					 */
-					if (test_and_set_bit(__QDISC_STATE_SCHED,
-								&q->state)) {
-						/* already scheduled, we need to skip it */
+					spin_lock(qdisc_lock(q));
+					can_steal = qdisc_run_begin(q);
+					spin_unlock(qdisc_lock(q));
+
+					if (!can_steal) {
+						if (pspat_debug_xmit) {
+							printk("Cannot steal qdisc %p \n", q);
+						}
+						/* qdisc already running, we have to skip it */
+						kfree_skb(skb);
 						continue;
 					}
+
 					/* add to the list of all the Qdiscs we serve
 					 * and initialize the PSPAT-specific fields.
-					 * We leave __QDISC_STATE_SCHED set to trick
+					 * We leave the QDISC_RUNNING bit set to trick
 					 * the system into ignoring the Qdisc
 					 */
 					q->pspat_owned = 1;
@@ -295,9 +304,9 @@ pspat_shutdown(struct pspat *arb)
 	struct Qdisc *q, **pq;
 
 	for (pq = &arb->qdiscs, q = *pq; q; pq = &q->pspat_next, q = *pq) {
-		if (!test_and_clear_bit(__QDISC_STATE_SCHED, &q->state)) {
-			BUG_ON(1);
-		}
+		spin_lock(qdisc_lock(q));
+		qdisc_run_end(q);
+		spin_unlock(qdisc_lock(q));
 		q->pspat_owned = 0;
 		*pq = NULL;
 	}
@@ -315,6 +324,10 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 		printk(KERN_INFO "q %p dev %p txq %p root_lock %p", q, dev, txq, qdisc_lock(q));
 	}
 
+	if (pspat_debug_xmit) {
+		printk("handler(%p,%p) [enable=%d]\n", arb, skb, pspat_enable);
+	}
+
 	if (!(pspat_enable && arb)) {
 		/* Not our business. */
 		return -ENOTTY;
@@ -329,6 +342,9 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 		rc = NET_XMIT_DROP;
 	}
 	put_cpu();
+	if (pspat_debug_xmit) {
+		printk("cli_push(%p) --> %d\n", skb, rc);
+	}
 	return rc;
 }
 
