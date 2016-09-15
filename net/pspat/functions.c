@@ -132,6 +132,8 @@ pspat_send(struct sk_buff *skb)
 	HARD_TX_LOCK(dev, txq, smp_processor_id());
 	if (!netif_xmit_frozen_or_stopped(txq))
 		skb = dev_hard_start_xmit(skb, dev, txq, &ret);
+	else if (pspat_debug_xmit)
+		printk("txq stopped, drop %p\n", skb);
 	HARD_TX_UNLOCK(dev, txq);
 
 	if (ret == NETDEV_TX_BUSY) {
@@ -216,6 +218,9 @@ pspat_do_arbiter(struct pspat *arb)
 					q->pspat_batch_limit = pspat_qdisc_batch_limit;
 				}
 				rc = q->enqueue(skb, q) & NET_XMIT_MASK;
+				if (pspat_debug_xmit) {
+					printk("enq(%p,%p)-->%d\n", q, skb, rc);
+				}
 				if (unlikely(rc)) {
 					/* enqueue frees the skb by itself
 					 * in case of error, so we have nothing
@@ -247,6 +252,9 @@ pspat_do_arbiter(struct pspat *arb)
 
 				if (skb == NULL)
 					break;
+				if (pspat_debug_xmit) {
+					printk("deq(%p)-->%p\n", q, skb);
+				}
 				q->pspat_next_link_idle +=
 					pspat_pkt_pico(pspat_rate, skb->len);
 				ndeq++;
