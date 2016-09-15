@@ -188,6 +188,7 @@ pspat_do_arbiter(struct pspat *arb)
 				 * the client chose the txq before sending
 				 * the skb to us, so we only need to recover it
 				 */
+				BUG_ON(dev == NULL);
 				txq = skb_get_tx_queue(dev, skb);
 
 				q = rcu_dereference_bh(txq->qdisc);
