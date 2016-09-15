@@ -34,13 +34,14 @@ emu_tmr_cb(long unsigned arg)
 
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
-int pspat_direct_xmit = 1;
+int pspat_xmit_mode = 0; /* packets sent by the arbiter */
 u64 pspat_rate = 40000000000; // 40Gb/s
 s64 pspat_arb_interval_ns = 1000;
 u32 pspat_arb_batch_limit = 40;
 u32 pspat_qdisc_batch_limit = 40;
 static int pspat_zero = 0;
 static int pspat_one = 1;
+static int pspat_two = 2;
 static unsigned long pspat_ulongzero = 0UL;
 static unsigned long pspat_ulongone = 1UL;
 static unsigned long pspat_ulongmax = (unsigned long)-1;
@@ -71,13 +72,13 @@ static struct ctl_table pspat_static_ctl[] = {
 		.extra2		= &pspat_one,
 	},
 	{
-		.procname	= "direct_xmit",
+		.procname	= "xmit_mode",
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.data		= &pspat_direct_xmit,
+		.data		= &pspat_xmit_mode,
 		.proc_handler	= &proc_dointvec_minmax,
 		.extra1		= &pspat_zero,
-		.extra2		= &pspat_one,
+		.extra2		= &pspat_two,
 	},
 	{
 		.procname	= "arb_interval_ns",

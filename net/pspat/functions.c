@@ -253,12 +253,18 @@ pspat_do_arbiter(struct pspat *arb)
 				BUG_ON(!skb->sender_cpu);
 			        pq = pspat_arb->queues + skb->sender_cpu - 1;
 				pq->arb_pending--;
-				if (pspat_direct_xmit) {
+				switch (pspat_xmit_mode) {
+				case 0:
 					skb = validate_xmit_skb_list(skb, skb->dev);
 					pspat_send(skb);
-				} else {
+					break;
+				case 1:
 					/* validation is done in the sender threads */
 					pspat_mark(pq, skb);
+					break;
+				default:
+					kfree_skb(skb);
+					break;
 				}
 			}
 		}

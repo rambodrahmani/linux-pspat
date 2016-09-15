@@ -63,7 +63,7 @@ int pspat_do_sender(struct pspat *arb);
 
 extern int pspat_enable;
 extern int pspat_debug_xmit;
-extern int pspat_direct_xmit;
+extern int pspat_xmit_mode;
 extern u64 pspat_rate;
 extern s64 pspat_arb_interval_ns;
 extern uint32_t pspat_qdisc_batch_limit;
