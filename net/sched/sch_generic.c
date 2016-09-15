@@ -85,8 +85,6 @@ static struct sk_buff *dequeue_skb(struct Qdisc *q, bool *validate,
 	struct sk_buff *skb = q->gso_skb;
 	const struct netdev_queue *txq = q->dev_queue;
 
-	printk(KERN_ERR "dequeue_skb!\n");
-
 	*packets = 1;
 	*validate = true;
 	if (unlikely(skb)) {
