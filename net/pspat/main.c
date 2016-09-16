@@ -35,6 +35,7 @@ emu_tmr_cb(long unsigned arg)
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
 int pspat_xmit_mode = 0; /* packets sent by the arbiter */
+int pspat_tc_bypass = 0;
 u64 pspat_rate = 40000000000; // 40Gb/s
 s64 pspat_arb_interval_ns = 1000;
 u32 pspat_arb_batch_limit = 40;
@@ -82,6 +83,15 @@ static struct ctl_table pspat_static_ctl[] = {
 		.proc_handler	= &proc_dointvec_minmax,
 		.extra1		= &pspat_zero,
 		.extra2		= &pspat_two,
+	},
+	{
+		.procname	= "tc_bypass",
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.data		= &pspat_tc_bypass,
+		.proc_handler	= &proc_dointvec_minmax,
+		.extra1		= &pspat_zero,
+		.extra2		= &pspat_one,
 	},
 	{
 		.procname	= "arb_interval_ns",
@@ -283,6 +293,18 @@ pspat_release(struct inode *inode, struct file *f)
 }
 
 static int
+pspat_bypass_enqueue(struct sk_buff *skb, struct Qdisc *q)
+{
+	return __qdisc_enqueue_tail(skb, q, &q->q);
+}
+
+static struct sk_buff *
+pspat_bypass_dequeue(struct Qdisc *q)
+{
+	return __qdisc_dequeue_head(q, &q->q);
+}
+
+static int
 pspat_create(struct file *f, unsigned int cmd)
 {
 	int cpus = num_online_cpus();
@@ -312,6 +334,14 @@ pspat_create(struct file *f, unsigned int cmd)
 	}
 	f->private_data = arb;
 	arb->n_queues = cpus;
+
+	/* Initialize bypass qdisc. */
+	arb->bypass_qdisc.enqueue = pspat_bypass_enqueue;
+	arb->bypass_qdisc.dequeue = pspat_bypass_dequeue;
+	skb_queue_head_init(&arb->bypass_qdisc.q);
+	arb->bypass_qdisc.pspat_owned = 0;
+	arb->bypass_qdisc.state = 0;
+	arb->bypass_qdisc.__state = 0;
 
 	init_waitqueue_head(&arb->wqh);
 

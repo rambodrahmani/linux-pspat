@@ -46,6 +46,7 @@ struct pspat {
 #ifdef EMULATE
 	struct timer_list	emu_tmr;
 #endif
+	struct Qdisc		bypass_qdisc;
 	int			n_queues;
 	struct pspat_queue	queues[0];
 };
@@ -63,6 +64,7 @@ int pspat_do_sender(struct pspat *arb);
 extern int pspat_enable;
 extern int pspat_debug_xmit;
 extern int pspat_xmit_mode;
+extern int pspat_tc_bypass;
 extern u64 pspat_rate;
 extern s64 pspat_arb_interval_ns;
 extern u64 pspat_arb_tc_enq_drop;

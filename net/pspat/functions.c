@@ -203,9 +203,14 @@ pspat_do_arbiter(struct pspat *arb)
 				 * the skb to us, so we only need to recover it
 				 */
 				BUG_ON(dev == NULL);
-				txq = skb_get_tx_queue(dev, skb);
 
-				q = rcu_dereference_bh(txq->qdisc);
+				if (pspat_tc_bypass) {
+					q = &arb->bypass_qdisc;
+				} else {
+					txq = skb_get_tx_queue(dev, skb);
+					q = rcu_dereference_bh(txq->qdisc);
+				}
+
 				if (unlikely(!q->pspat_owned)) {
 					struct sk_buff *oskb;
 					int can_steal;
@@ -257,6 +262,7 @@ pspat_do_arbiter(struct pspat *arb)
 					 */
 					q->pspat_batch_limit = pspat_qdisc_batch_limit;
 				}
+
 				rc = q->enqueue(skb, q) & NET_XMIT_MASK;
 				if (pspat_debug_xmit) {
 					printk("enq(%p,%p)-->%d\n", q, skb, rc);
