@@ -39,7 +39,9 @@ u64 pspat_rate = 40000000000; // 40Gb/s
 s64 pspat_arb_interval_ns = 1000;
 u32 pspat_arb_batch_limit = 40;
 u32 pspat_qdisc_batch_limit = 40;
-u64 pspat_tc_enq_drop = 0;
+u64 pspat_arb_tc_enq_drop = 0;
+u64 pspat_arb_tc_deq = 0;
+u64 pspat_xmit_ok = 0;
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static int pspat_two = 2;
@@ -114,10 +116,28 @@ static struct ctl_table pspat_static_ctl[] = {
 		.extra2		= &pspat_ulongmax,
 	},
 	{
-		.procname	= "tc-enq-drop",
+		.procname	= "arb_tc_enq_drop",
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
-		.data		= &pspat_tc_enq_drop,
+		.data		= &pspat_arb_tc_enq_drop,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "arb_tc_deq",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_arb_tc_deq,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "xmit_ok",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_xmit_ok,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
 		.extra2		= &pspat_ulongmax,

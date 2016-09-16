@@ -139,6 +139,8 @@ pspat_send(struct sk_buff *skb)
 	if (ret == NETDEV_TX_BUSY) {
 		// XXX we should requeue into the qdisc
 		kfree_skb(skb);
+	} else {
+		pspat_xmit_ok ++;
 	}
 }
 
@@ -254,7 +256,7 @@ pspat_do_arbiter(struct pspat *arb)
 					printk("enq(%p,%p)-->%d\n", q, skb, rc);
 				}
 				if (unlikely(rc)) {
-					pspat_tc_enq_drop ++;
+					pspat_arb_tc_enq_drop ++;
 					/* enqueue frees the skb by itself
 					 * in case of error, so we have nothing
 					 * to do here
@@ -285,6 +287,7 @@ pspat_do_arbiter(struct pspat *arb)
 
 				if (skb == NULL)
 					break;
+				pspat_arb_tc_deq ++;
 				if (pspat_debug_xmit) {
 					printk("deq(%p)-->%p\n", q, skb);
 				}

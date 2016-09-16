@@ -66,7 +66,9 @@ extern int pspat_debug_xmit;
 extern int pspat_xmit_mode;
 extern u64 pspat_rate;
 extern s64 pspat_arb_interval_ns;
-extern u64 pspat_tc_enq_drop;
+extern u64 pspat_arb_tc_enq_drop;
+extern u64 pspat_arb_tc_deq;
+extern u64 pspat_xmit_ok;
 extern uint32_t pspat_qdisc_batch_limit;
 extern struct pspat_stats *pspat_stats;
 
