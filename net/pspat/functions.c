@@ -132,7 +132,7 @@ pspat_send(struct sk_buff *skb)
 	HARD_TX_LOCK(dev, txq, smp_processor_id());
 	if (!netif_xmit_frozen_or_stopped(txq))
 		skb = dev_hard_start_xmit(skb, dev, txq, &ret);
-	else if (pspat_debug_xmit)
+	else if (unlikely(pspat_debug_xmit))
 		printk("txq stopped, drop %p\n", skb);
 	HARD_TX_UNLOCK(dev, txq);
 
@@ -167,7 +167,7 @@ pspat_do_arbiter(struct pspat *arb)
 			struct pspat_queue *pq = arb->queues + i;
 			struct sk_buff *skb;
 
-			if (pspat_debug_xmit) {
+			if (unlikely(pspat_debug_xmit)) {
 				printk("Queue #%d: %u %u %u %u %u %u %u %u %u %u\n",
 					i,
 					pq->cli_inq_tail,
@@ -226,7 +226,7 @@ pspat_do_arbiter(struct pspat *arb)
 					spin_unlock(qdisc_lock(q));
 
 					if (!can_steal) {
-						if (pspat_debug_xmit) {
+						if (unlikely(pspat_debug_xmit)) {
 							printk("Cannot steal qdisc %p \n", q);
 						}
 						/* qdisc already running, we have to skip it */
@@ -264,7 +264,7 @@ pspat_do_arbiter(struct pspat *arb)
 				}
 
 				rc = q->enqueue(skb, q) & NET_XMIT_MASK;
-				if (pspat_debug_xmit) {
+				if (unlikely(pspat_debug_xmit)) {
 					printk("enq(%p,%p)-->%d\n", q, skb, rc);
 				}
 				if (unlikely(rc)) {
@@ -299,7 +299,7 @@ pspat_do_arbiter(struct pspat *arb)
 				if (skb == NULL)
 					break;
 				pspat_arb_tc_deq ++;
-				if (pspat_debug_xmit) {
+				if (unlikely(pspat_debug_xmit)) {
 					printk("deq(%p)-->%p\n", q, skb);
 				}
 				q->pspat_next_link_idle +=
@@ -363,7 +363,7 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 		printk(KERN_INFO "q %p dev %p txq %p root_lock %p", q, dev, txq, qdisc_lock(q));
 	}
 
-	if (pspat_debug_xmit) {
+	if (unlikely(pspat_debug_xmit)) {
 		printk("handler(%p,%p) [enable=%d]\n", arb, skb, pspat_enable);
 	}
 
@@ -381,7 +381,7 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 		rc = NET_XMIT_DROP;
 	}
 	put_cpu();
-	if (pspat_debug_xmit) {
+	if (unlikely(pspat_debug_xmit)) {
 		printk("cli_push(%p) --> %d\n", skb, rc);
 	}
 	return rc;
