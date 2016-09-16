@@ -254,6 +254,7 @@ pspat_do_arbiter(struct pspat *arb)
 					printk("enq(%p,%p)-->%d\n", q, skb, rc);
 				}
 				if (unlikely(rc)) {
+					pspat_tc_enq_drop ++;
 					/* enqueue frees the skb by itself
 					 * in case of error, so we have nothing
 					 * to do here
@@ -365,7 +366,7 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	cpu = get_cpu(); /* also disables preemption */
 	pq = arb->queues + cpu;
 	if (pspat_cli_push(pq, skb)) {
-		pspat_stats[cpu].dropped++;
+		pspat_stats[cpu].inq_drop++;
 		kfree_skb(skb);
 		rc = NET_XMIT_DROP;
 	}

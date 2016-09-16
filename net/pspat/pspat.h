@@ -66,11 +66,12 @@ extern int pspat_debug_xmit;
 extern int pspat_xmit_mode;
 extern u64 pspat_rate;
 extern s64 pspat_arb_interval_ns;
+extern u64 pspat_tc_enq_drop;
 extern uint32_t pspat_qdisc_batch_limit;
 extern struct pspat_stats *pspat_stats;
 
 struct pspat_stats {
-	unsigned long dropped;
+	unsigned long inq_drop;
 } __attribute__((aligned(32)));
 
 #endif  /* __PSPAT_H__ */

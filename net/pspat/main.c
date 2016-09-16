@@ -39,6 +39,7 @@ u64 pspat_rate = 40000000000; // 40Gb/s
 s64 pspat_arb_interval_ns = 1000;
 u32 pspat_arb_batch_limit = 40;
 u32 pspat_qdisc_batch_limit = 40;
+u64 pspat_tc_enq_drop = 0;
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static int pspat_two = 2;
@@ -112,6 +113,15 @@ static struct ctl_table pspat_static_ctl[] = {
 		.extra1		= &pspat_ulongone,
 		.extra2		= &pspat_ulongmax,
 	},
+	{
+		.procname	= "tc-enq-drop",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_tc_enq_drop,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
 	{}
 };
 
@@ -164,7 +174,7 @@ pspat_sysctl_init(void)
 	for (i = 0; i < cpus; i++) {
 		t = leaves + i;
 
-		n = snprintf(name, extra_size, "dropped-%d", i);
+		n = snprintf(name, extra_size, "inq-drop-%d", i);
 		if (n >= extra_size) { /* truncated */
 			printk(KERN_WARNING "pspat: not enough space for per-cpu sysctl names");
 			goto free_leaves;
@@ -175,7 +185,7 @@ pspat_sysctl_init(void)
 
 		t->maxlen	= sizeof(unsigned long);
 		t->mode		= 0644;
-		t->data		= &pspat_stats[i].dropped;
+		t->data		= &pspat_stats[i].inq_drop;
 		t->proc_handler	= &proc_doulongvec_minmax;
 		t->extra1	= &pspat_ulongzero;
 		t->extra2	= &pspat_ulongmax;
