@@ -244,9 +244,7 @@ pspat_do_arbiter(struct pspat *arb)
 						kfree_skb(oskb);
 						j ++;
 					}
-					if (j) {
-						printk("Stolen qdisc %p, drained %d skbs\n", q, j);
-					}
+					printk("Stolen qdisc %p, drained %d skbs\n", q, j);
 
 					/* add to the list of all the Qdiscs we serve
 					 * and initialize the PSPAT-specific fields.
@@ -359,12 +357,8 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	struct pspat_queue *pq;
 	struct pspat *arb = rcu_dereference(pspat_arb);
 
-	if (0 && pspat_debug_xmit) {
-		printk(KERN_INFO "q %p dev %p txq %p root_lock %p", q, dev, txq, qdisc_lock(q));
-	}
-
 	if (unlikely(pspat_debug_xmit)) {
-		printk("handler(%p,%p) [enable=%d]\n", arb, skb, pspat_enable);
+		printk("handler(%p,%p)\n", arb, skb);
 	}
 
 	if (!(pspat_enable && arb)) {
