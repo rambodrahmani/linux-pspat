@@ -146,11 +146,15 @@ pspat_send(struct sk_buff *skb)
 int
 pspat_do_arbiter(struct pspat *arb)
 {
-	unsigned int j = jiffies;
+	unsigned long jstop = jiffies + msecs_to_jiffies(1000);
 
 	// printk(KERN_INFO "Arbiter woken up\n");
-	
-	while (!need_resched() && jiffies < j + msecs_to_jiffies(1000)) {
+
+	if (pspat_debug_xmit == 2) {
+		printk("time_before(%lu, %lu) = %d\n", jiffies, jstop, time_before(jiffies, jstop));
+	}
+
+	do {
 		int i;
 		s64 now = ktime_get_ns() << 10;
 		struct Qdisc *q;
@@ -168,8 +172,12 @@ pspat_do_arbiter(struct pspat *arb)
 			 * Skip clients with at least one packet/burst already
 			 * in the scheduler.
 			 */
-			if (pq->arb_pending)
+			if (pq->arb_pending > 0) {
+				if (pspat_debug_xmit) {
+					printk("skip queue #%d\n", i);
+				}
 				continue;
+			}
 
 			if (now < pq->arb_extract_next) {
 				continue;
@@ -195,12 +203,17 @@ pspat_do_arbiter(struct pspat *arb)
 
 				q = rcu_dereference_bh(txq->qdisc);
 				if (unlikely(!q->pspat_owned)) {
+					struct sk_buff *oskb;
 					int can_steal;
+					int j = 0;
 					/* it is the first time we see this Qdisc,
 					 * let us try to steal it from the system
 					 */
 					spin_lock(qdisc_lock(q));
 					can_steal = qdisc_run_begin(q);
+					if (can_steal) {
+						set_bit(__QDISC_STATE_DEACTIVATED, &q->state);
+					}
 					spin_unlock(qdisc_lock(q));
 
 					if (!can_steal) {
@@ -210,6 +223,20 @@ pspat_do_arbiter(struct pspat *arb)
 						/* qdisc already running, we have to skip it */
 						kfree_skb(skb);
 						continue;
+					}
+
+					if (q->gso_skb) {
+						kfree_skb(q->gso_skb);
+						q->gso_skb = NULL;
+						q->q.qlen--;
+						j ++;
+					}
+					while ((oskb = q->dequeue(q))) {
+						kfree_skb(oskb);
+						j ++;
+					}
+					if (j) {
+						printk("Stolen qdisc %p, drained %d skbs\n", q, j);
 					}
 
 					/* add to the list of all the Qdiscs we serve
@@ -270,6 +297,9 @@ pspat_do_arbiter(struct pspat *arb)
 				BUG_ON(!skb->sender_cpu);
 			        pq = pspat_arb->queues + skb->sender_cpu - 1;
 				pq->arb_pending--;
+				if (unlikely(pq->arb_pending < 0)) {
+					pq->arb_pending = 0;
+				}
 				switch (pspat_xmit_mode) {
 				case 0:
 					skb = validate_xmit_skb_list(skb, skb->dev);
@@ -293,7 +323,8 @@ pspat_do_arbiter(struct pspat *arb)
 		}
 
 		rcu_read_unlock_bh();
-	}
+		break;
+	} while (!need_resched() && time_before(jiffies, jstop));
 
 	return 0;
 }
@@ -306,6 +337,7 @@ pspat_shutdown(struct pspat *arb)
 	for (pq = &arb->qdiscs, q = *pq; q; pq = &q->pspat_next, q = *pq) {
 		spin_lock(qdisc_lock(q));
 		qdisc_run_end(q);
+		clear_bit(__QDISC_STATE_DEACTIVATED, &q->state);
 		spin_unlock(qdisc_lock(q));
 		q->pspat_owned = 0;
 		*pq = NULL;
