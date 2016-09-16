@@ -166,15 +166,21 @@ pspat_do_arbiter(struct pspat *arb)
 		for (i = 0; i < arb->n_queues; i++) {
 			struct pspat_queue *pq = arb->queues + i;
 			struct sk_buff *skb;
-			/*
-			 * Skip clients with at least one packet/burst already
-			 * in the scheduler.
-			 */
-			if (0 && pq->arb_pending > 0) {
-				if (pspat_debug_xmit) {
-					printk("skip queue #%d\n", i);
-				}
-				continue;
+
+			if (pspat_debug_xmit) {
+				printk("Queue #%d: %u %u %u %u %u %u %u %u %u %u\n",
+					i,
+					pq->cli_inq_tail,
+					pq->cli_outq_head,
+					pq->arb_outq_tail,
+					pq->arb_inq_head,
+					pq->arb_inq_ntc,
+					pq->arb_cacheq_tail,
+					pq->arb_cacheq_head,
+					pq->arb_markq_tail,
+					pq->arb_markq_head,
+					pq->arb_inq_full
+				      );
 			}
 
 			if (now < pq->arb_extract_next) {
@@ -263,7 +269,6 @@ pspat_do_arbiter(struct pspat *arb)
 					 */
 					continue;
 				}
-				pq->arb_pending++;
 			}
 		}
 		for (q = arb->qdiscs; q; q = q->pspat_next) {
@@ -296,10 +301,6 @@ pspat_do_arbiter(struct pspat *arb)
 				ndeq++;
 				BUG_ON(!skb->sender_cpu);
 			        pq = pspat_arb->queues + skb->sender_cpu - 1;
-				pq->arb_pending--;
-				if (unlikely(pq->arb_pending < 0)) {
-					pq->arb_pending = 0;
-				}
 				switch (pspat_xmit_mode) {
 				case 0:
 					skb = validate_xmit_skb_list(skb, skb->dev);
