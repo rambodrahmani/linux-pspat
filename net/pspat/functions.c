@@ -150,10 +150,6 @@ pspat_do_arbiter(struct pspat *arb)
 
 	// printk(KERN_INFO "Arbiter woken up\n");
 
-	if (pspat_debug_xmit == 2) {
-		printk("time_before(%lu, %lu) = %d\n", jiffies, jstop, time_before(jiffies, jstop));
-	}
-
 	do {
 		int i;
 		s64 now = ktime_get_ns() << 10;
@@ -172,7 +168,7 @@ pspat_do_arbiter(struct pspat *arb)
 			 * Skip clients with at least one packet/burst already
 			 * in the scheduler.
 			 */
-			if (pq->arb_pending > 0) {
+			if (0 && pq->arb_pending > 0) {
 				if (pspat_debug_xmit) {
 					printk("skip queue #%d\n", i);
 				}

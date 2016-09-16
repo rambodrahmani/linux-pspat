@@ -4,7 +4,7 @@
 #define START_NEW_CACHELINE	____cacheline_aligned_in_smp
 
 //#define EMULATE
-#define PSPAT_QLEN           128
+#define PSPAT_QLEN           512
 
 struct pspat_queue {
 	/* Input queue, written by clients, read by the arbiter. */
