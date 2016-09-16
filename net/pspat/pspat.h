@@ -70,6 +70,7 @@ extern s64 pspat_arb_interval_ns;
 extern u64 pspat_arb_tc_enq_drop;
 extern u64 pspat_arb_tc_deq;
 extern u64 pspat_xmit_ok;
+extern u64 *pspat_rounds;
 extern uint32_t pspat_qdisc_batch_limit;
 extern struct pspat_stats *pspat_stats;
 

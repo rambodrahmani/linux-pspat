@@ -43,6 +43,7 @@ u32 pspat_qdisc_batch_limit = 40;
 u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_tc_deq = 0;
 u64 pspat_xmit_ok = 0;
+u64 *pspat_rounds;
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static int pspat_two = 2;
@@ -56,6 +57,15 @@ static struct ctl_table pspat_static_ctl[] = {
 		.procname	= "cpu",
 		.mode		= 0444,
 		.child		= NULL, /* created at run-time */
+	},
+	{
+		.procname	= "rounds",
+		/* .maxlen	computed at runtime */
+		.mode		= 0444,
+		/* .data	computed at runtime */
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
 	},
 	{
 		.procname	= "enable",
@@ -191,12 +201,21 @@ pspat_sysctl_init(void)
 		goto out;
 	}
 
+	size = (cpus + 1) * sizeof(u64);
+	pspat_rounds = kzalloc(size, GFP_KERNEL);
+	if (pspat_rounds == NULL) {
+		printk(KERN_WARNING "pspat: unable to allocate rounds counter array\n");
+		goto free_stats;
+	}
+	pspat_static_ctl[1].data = pspat_rounds;
+	pspat_static_ctl[1].maxlen = size;
+
         extra_size = cpus * 16 /* space for the syctl names */,
 	size = extra_size + sizeof(struct ctl_table) * (cpus + 1);
 	buf = kzalloc(size, GFP_KERNEL);
 	if (buf == NULL) {
 		printk(KERN_WARNING "pspat: unable to allocate sysctls");
-		goto free_stats;
+		goto free_rounds;
 	}
 	name = buf;
 	leaves = buf + extra_size;
@@ -227,6 +246,8 @@ pspat_sysctl_init(void)
 
 free_leaves:
 	kfree(buf);
+free_rounds:
+	kfree(pspat_rounds);
 free_stats:
 	free_page((unsigned long)pspat_stats);
 out:
@@ -240,6 +261,8 @@ pspat_sysctl_fini(void)
 		unregister_sysctl_table(pspat_sysctl_hdr);
 	if (pspat_static_ctl[0].child)
 		kfree(pspat_static_ctl[0].child);
+	if (pspat_rounds)
+		kfree(pspat_rounds);
 	if (pspat_stats)
 		free_page((unsigned long)pspat_stats);
 }

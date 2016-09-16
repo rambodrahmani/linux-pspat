@@ -28,15 +28,17 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
  * There must be a call to pspat_arb_ack between
  * any two calls to pspat_arb_fetch
  */
-static void
+static int
 pspat_arb_fetch(struct pspat_queue *pq)
 {
 	uint32_t head = pq->arb_inq_head;
 	uint32_t tail = pq->arb_cacheq_tail;
 	uint32_t head_first = head;
+	int n = 0;
 
 	/* cacheq should always be empty at this point */
 	while (pq->inq[head]) {
+		n++;
 		pq->cacheq[tail] = pq->inq[head];
 		
 		pspat_next(head);
@@ -48,6 +50,8 @@ pspat_arb_fetch(struct pspat_queue *pq)
 	}
 	pq->arb_inq_head = head;
 	pq->arb_cacheq_tail = tail;
+
+	return n;
 }
 
 /* extract skb from the local queue */
@@ -153,7 +157,7 @@ pspat_do_arbiter(struct pspat *arb)
 	// printk(KERN_INFO "Arbiter woken up\n");
 
 	do {
-		int i;
+		int i, notempty;
 		s64 now = ktime_get_ns() << 10;
 		struct Qdisc *q;
 
@@ -163,6 +167,7 @@ pspat_do_arbiter(struct pspat *arb)
 		 * bring in pending packets, arrived between next_link_idle
 		 * and now (we assume they arrived at last_check)
 		 */
+		notempty = 0;
 		for (i = 0; i < arb->n_queues; i++) {
 			struct pspat_queue *pq = arb->queues + i;
 			struct sk_buff *skb;
@@ -191,7 +196,7 @@ pspat_do_arbiter(struct pspat *arb)
 			/* 
 			 * copy the new skbs from pq to our local cache.
 			 */
-			pspat_arb_fetch(pq);
+			notempty += !!pspat_arb_fetch(pq);
 
 			while ( (skb = pspat_arb_get_skb(pq)) ) {
 				struct net_device *dev = skb->dev;
@@ -275,6 +280,7 @@ pspat_do_arbiter(struct pspat *arb)
 				}
 			}
 		}
+		pspat_rounds[notempty]++;
 		for (q = arb->qdiscs; q; q = q->pspat_next) {
 			int ndeq = 0;
 
