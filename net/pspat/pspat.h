@@ -3,7 +3,6 @@
 
 #define START_NEW_CACHELINE	____cacheline_aligned_in_smp
 
-//#define EMULATE
 #define PSPAT_QLEN           512
 
 struct pspat_queue {
@@ -41,9 +40,6 @@ struct pspat_queue {
 struct pspat {
 	wait_queue_head_t wqh;
 	struct Qdisc	       *qdiscs;
-#ifdef EMULATE
-	struct timer_list	emu_tmr;
-#endif
 	struct Qdisc		bypass_qdisc;
 	struct list_head	arb_active_txqs;
 	int			n_queues;

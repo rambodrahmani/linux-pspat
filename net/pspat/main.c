@@ -21,17 +21,6 @@
 DEFINE_MUTEX(pspat_glock);
 struct pspat *pspat_arb;
 
-#ifdef EMULATE
-static void
-emu_tmr_cb(long unsigned arg)
-{
-	struct pspat *arb = (struct pspat *)arg;
-
-	wake_up_interruptible(&arb->wqh);
-	mod_timer(&arb->emu_tmr, jiffies + msecs_to_jiffies(1000));
-}
-#endif
-
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
 int pspat_xmit_mode = 0; /* packets sent by the arbiter */
@@ -309,9 +298,6 @@ pspat_release(struct inode *inode, struct file *f)
 		synchronize_rcu();
 
 		pspat_shutdown(arb);
-#ifdef EMULATE
-		del_timer_sync(&arb->emu_tmr);
-#endif
 		kfree(arb);
 
 		f->private_data = NULL;
@@ -378,12 +364,6 @@ pspat_create(struct file *f, unsigned int cmd)
 
 	init_waitqueue_head(&arb->wqh);
 
-#ifdef EMULATE
-	arb->emu_tmr.function = emu_tmr_cb;
-	arb->emu_tmr.data = (long unsigned)arb;
-	mod_timer(&arb->emu_tmr,
-		  jiffies + msecs_to_jiffies(1000));
-#endif
 	/* Register the arbiter. */
 	rcu_assign_pointer(pspat_arb, arb);
 	synchronize_rcu();
