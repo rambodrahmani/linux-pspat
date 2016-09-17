@@ -38,8 +38,12 @@ struct pspat_queue {
 };
 
 struct pspat {
-	wait_queue_head_t wqh;
+	/* to notify arbiter, currently unused. */
+	wait_queue_head_t	wqh;
+
+	/* list of all the qdiscs that we stole from the system */
 	struct Qdisc	       *qdiscs;
+
 	struct Qdisc		bypass_qdisc;
 	struct list_head	arb_active_txqs;
 	int			n_queues;
