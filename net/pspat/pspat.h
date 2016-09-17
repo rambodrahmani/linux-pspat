@@ -45,7 +45,7 @@ struct pspat {
 	struct Qdisc	       *qdiscs;
 
 	struct Qdisc		bypass_qdisc;
-	struct list_head	arb_active_txqs;
+	struct list_head	active_txqs;
 	int			n_queues;
 	struct pspat_queue	queues[0];
 };

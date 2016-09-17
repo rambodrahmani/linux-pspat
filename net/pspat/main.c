@@ -364,7 +364,7 @@ pspat_create(struct file *f, unsigned int cmd)
 
 	init_waitqueue_head(&arb->wqh);
 
-	INIT_LIST_HEAD(&arb->arb_active_txqs);
+	INIT_LIST_HEAD(&arb->active_txqs);
 
 	/* Register the arbiter. */
 	rcu_assign_pointer(pspat_arb, arb);

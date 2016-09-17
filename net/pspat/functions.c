@@ -89,7 +89,7 @@ pspat_mark(struct pspat *arb, struct sk_buff *skb)
 		txq->pspat_markq_head = skb;
 	}
 	if (list_empty(&txq->pspat_active)) {
-		list_add_tail(&txq->pspat_active, &arb->arb_active_txqs);
+		list_add_tail(&txq->pspat_active, &arb->active_txqs);
 	}
 }
 
@@ -337,7 +337,8 @@ pspat_do_arbiter(struct pspat *arb)
 	}
 
 	if (pspat_xmit_mode < 2) {
-		list_for_each_entry_safe(txq_cursor, txq_next, &arb->arb_active_txqs, pspat_active) {
+		list_for_each_entry_safe(txq_cursor, txq_next,
+				&arb->active_txqs, pspat_active) {
 			if (pspat_xmit_mode == 0)
 				pspat_arb_send(txq_cursor);
 			else
