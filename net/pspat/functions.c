@@ -154,7 +154,7 @@ pspat_do_arbiter(struct pspat *arb)
 {
 	int i, notempty;
 	s64 now = ktime_get_ns() << 10;
-	struct Qdisc *q;
+	struct Qdisc *q = &arb->bypass_qdisc;
 
 	rcu_read_lock_bh();
 
@@ -204,9 +204,7 @@ pspat_do_arbiter(struct pspat *arb)
 			 */
 			BUG_ON(dev == NULL);
 
-			if (pspat_tc_bypass) {
-				q = &arb->bypass_qdisc;
-			} else {
+			if (!pspat_tc_bypass) {
 				txq = skb_get_tx_queue(dev, skb);
 				q = rcu_dereference_bh(txq->qdisc);
 			}
