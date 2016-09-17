@@ -591,6 +591,11 @@ struct netdev_queue {
 #ifdef CONFIG_BQL
 	struct dql		dql;
 #endif
+#ifdef CONFIG_PSPAT
+	struct sk_buff	       *pspat_markq_head;
+	struct sk_buff	       *pspat_markq_tail;
+	struct list_head	pspat_active;
+#endif
 	unsigned long		tx_maxrate;
 } ____cacheline_aligned_in_smp;
 

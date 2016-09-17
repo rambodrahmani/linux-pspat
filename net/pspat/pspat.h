@@ -27,8 +27,6 @@ struct pspat_queue {
 	uint32_t		arb_inq_ntc;  /* next to clean */
 	uint32_t		arb_cacheq_tail;
 	uint32_t		arb_cacheq_head;
-	uint32_t		arb_markq_tail;
-	uint32_t		arb_markq_head;
 	s64			arb_extract_next;
 	int			arb_inq_full;
 
@@ -47,6 +45,7 @@ struct pspat {
 	struct timer_list	emu_tmr;
 #endif
 	struct Qdisc		bypass_qdisc;
+	struct list_head	arb_active_txqs;
 	int			n_queues;
 	struct pspat_queue	queues[0];
 };

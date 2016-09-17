@@ -67,17 +67,30 @@ pspat_arb_get_skb(struct pspat_queue *pq)
 	return skb;
 }
 
+static struct netdev_queue *
+pspat_get_txq(struct sk_buff *skb)
+{
+	struct net_device *dev = skb->dev;
+	return pspat_single_txq ? 
+		netdev_get_tx_queue(dev, 0) :
+		skb_get_tx_queue(dev, skb);
+}
+
 /* locally mark skb as eligible for transmission */
 static void
-pspat_mark(struct pspat_queue *pq, struct sk_buff *skb)
+pspat_mark(struct pspat *arb, struct sk_buff *skb)
 {
-	uint32_t tail = pq->arb_markq_tail;
+	struct netdev_queue *txq = pspat_get_txq(skb);
 
-	BUG_ON(skb->sender_cpu == 0);
-
-	pq->markq[tail] = skb;
-
-	pspat_next(pq->arb_markq_tail);
+	if (txq->pspat_markq_tail) {
+		txq->pspat_markq_tail->next = skb;
+	} else {
+		txq->pspat_markq_tail = skb;
+		txq->pspat_markq_head = skb;
+	}
+	if (list_empty(&txq->pspat_active)) {
+		list_add_tail(&txq->pspat_active, &arb->arb_active_txqs);
+	}
 }
 
 static uint64_t
@@ -88,25 +101,26 @@ pspat_pkt_pico(uint64_t rate, unsigned int len)
 
 /* copy new skbs to the sender queue */
 static void
-pspat_arb_publish(struct pspat_queue *pq)
+pspat_arb_publish(struct netdev_queue *txq)
 {
-	uint32_t head = pq->arb_markq_head;
+#if 0
 	uint32_t tail = pq->arb_outq_tail;
+	struct sk_buff *skb, *next;
 
-	while (pq->markq[head]) {
+	for (skb = txq->mark_queue_head; skb; skb = next) {
+		next = skb->next;
+		skb->next = NULL;
 		if (likely(pq->outq[tail] == NULL)) {
 			pq->outq[tail] = pq->markq[head];
 		} else {
 			kfree_skb(pq->markq[head]);
 			// XXX increment dropped counter
 		}
-		pq->markq[head] = NULL;
 		
-		pspat_next(head);
 		pspat_next(tail);
 	}
-	pq->arb_markq_head = head;
 	pq->arb_outq_tail = tail;
+#endif
 }
 
 /* zero out the used skbs in the client queue */
@@ -125,15 +139,12 @@ pspat_arb_ack(struct pspat_queue *pq)
 }
 
 static void
-pspat_send(struct sk_buff *skb)
+pspat_arb_send(struct netdev_queue *txq)
 {
-	struct net_device *dev = skb->dev;
-	struct netdev_queue *txq;
+	struct net_device *dev = txq->dev;
+	struct sk_buff *skb = txq->pspat_markq_head;
 	int ret = NETDEV_TX_BUSY;
 
-	txq = pspat_single_txq ? 
-		netdev_get_tx_queue(dev, 0) :
-		skb_get_tx_queue(dev, skb);
 
 	HARD_TX_LOCK(dev, txq, smp_processor_id());
 	if (!netif_xmit_frozen_or_stopped(txq))
@@ -148,6 +159,7 @@ pspat_send(struct sk_buff *skb)
 	} else {
 		pspat_xmit_ok ++;
 	}
+	txq->pspat_markq_head = txq->pspat_markq_tail = NULL;
 }
 
 /* Function implementing the arbiter. */
@@ -157,6 +169,7 @@ pspat_do_arbiter(struct pspat *arb)
 	int i, notempty;
 	s64 now = ktime_get_ns() << 10;
 	struct Qdisc *q = &arb->bypass_qdisc;
+	struct netdev_queue *txq_cursor, *txq_next;
 
 	rcu_read_lock_bh();
 
@@ -170,7 +183,7 @@ pspat_do_arbiter(struct pspat *arb)
 		struct sk_buff *skb;
 
 		if (unlikely(pspat_debug_xmit)) {
-			printk("Queue #%d: %u %u %u %u %u %u %u %u %u %u\n",
+			printk("Queue #%d: %u %u %u %u %u %u %u %u\n",
 				i,
 				pq->cli_inq_tail,
 				pq->cli_outq_head,
@@ -179,8 +192,6 @@ pspat_do_arbiter(struct pspat *arb)
 				pq->arb_inq_ntc,
 				pq->arb_cacheq_tail,
 				pq->arb_cacheq_head,
-				pq->arb_markq_tail,
-				pq->arb_markq_head,
 				pq->arb_inq_full
 			      );
 		}
@@ -276,6 +287,10 @@ pspat_do_arbiter(struct pspat *arb)
 		}
 	}
 	pspat_rounds[notempty]++;
+	for (i = 0; i < arb->n_queues; i++) {
+		struct pspat_queue *pq = arb->queues + i;
+		pspat_arb_ack(pq);     /* to clients */
+	}
 	for (q = arb->qdiscs; q; q = q->pspat_next) {
 		int ndeq = 0;
 
@@ -309,11 +324,10 @@ pspat_do_arbiter(struct pspat *arb)
 			switch (pspat_xmit_mode) {
 			case 0:
 				skb = validate_xmit_skb_list(skb, skb->dev);
-				pspat_send(skb);
-				break;
+				/* fallthrough */
 			case 1:
 				/* validation is done in the sender threads */
-				pspat_mark(pq, skb);
+				pspat_mark(arb, skb);
 				break;
 			default:
 				kfree_skb(skb);
@@ -322,10 +336,14 @@ pspat_do_arbiter(struct pspat *arb)
 		}
 	}
 
-	for (i = 0; i < arb->n_queues; i++) {
-		struct pspat_queue *pq = arb->queues + i;
-		pspat_arb_publish(pq); /* to senders */
-		pspat_arb_ack(pq);     /* to clients */
+	if (pspat_xmit_mode < 2) {
+		list_for_each_entry_safe(txq_cursor, txq_next, &arb->arb_active_txqs, pspat_active) {
+			if (pspat_xmit_mode == 0)
+				pspat_arb_send(txq_cursor);
+			else
+				pspat_arb_publish(txq_cursor);
+			list_del(&txq_cursor->pspat_active);
+		}
 	}
 
 	rcu_read_unlock_bh();

@@ -6875,6 +6875,11 @@ static void netdev_init_one_queue(struct net_device *dev,
 #ifdef CONFIG_BQL
 	dql_init(&queue->dql, HZ);
 #endif
+#ifdef CONFIG_PSPAT
+	queue->pspat_markq_head = NULL;
+	queue->pspat_markq_tail = NULL;
+	INIT_LIST_HEAD(&queue->pspat_active);
+#endif
 }
 
 static void netif_free_tx_queues(struct net_device *dev)
