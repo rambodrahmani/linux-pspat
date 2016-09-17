@@ -343,7 +343,7 @@ pspat_do_arbiter(struct pspat *arb)
 				pspat_arb_send(txq_cursor);
 			else
 				pspat_arb_publish(txq_cursor);
-			list_del(&txq_cursor->pspat_active);
+			list_del_init(&txq_cursor->pspat_active);
 		}
 	}
 
