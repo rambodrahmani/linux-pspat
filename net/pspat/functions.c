@@ -152,190 +152,183 @@ pspat_send(struct sk_buff *skb)
 int
 pspat_do_arbiter(struct pspat *arb)
 {
-	unsigned long jstop = jiffies + msecs_to_jiffies(1000);
+	int i, notempty;
+	s64 now = ktime_get_ns() << 10;
+	struct Qdisc *q;
 
-	// printk(KERN_INFO "Arbiter woken up\n");
+	rcu_read_lock_bh();
 
-	do {
-		int i, notempty;
-		s64 now = ktime_get_ns() << 10;
-		struct Qdisc *q;
+	/*
+	 * bring in pending packets, arrived between next_link_idle
+	 * and now (we assume they arrived at last_check)
+	 */
+	notempty = 0;
+	for (i = 0; i < arb->n_queues; i++) {
+		struct pspat_queue *pq = arb->queues + i;
+		struct sk_buff *skb;
 
-		rcu_read_lock_bh();
+		if (unlikely(pspat_debug_xmit)) {
+			printk("Queue #%d: %u %u %u %u %u %u %u %u %u %u\n",
+				i,
+				pq->cli_inq_tail,
+				pq->cli_outq_head,
+				pq->arb_outq_tail,
+				pq->arb_inq_head,
+				pq->arb_inq_ntc,
+				pq->arb_cacheq_tail,
+				pq->arb_cacheq_head,
+				pq->arb_markq_tail,
+				pq->arb_markq_head,
+				pq->arb_inq_full
+			      );
+		}
 
-		/*
-		 * bring in pending packets, arrived between next_link_idle
-		 * and now (we assume they arrived at last_check)
+		if (now < pq->arb_extract_next) {
+			continue;
+		}
+		pq->arb_extract_next = now + (pspat_arb_interval_ns << 10);
+
+		/* 
+		 * copy the new skbs from pq to our local cache.
 		 */
-		notempty = 0;
-		for (i = 0; i < arb->n_queues; i++) {
-			struct pspat_queue *pq = arb->queues + i;
-			struct sk_buff *skb;
+		notempty += !!pspat_arb_fetch(pq);
 
-			if (unlikely(pspat_debug_xmit)) {
-				printk("Queue #%d: %u %u %u %u %u %u %u %u %u %u\n",
-					i,
-					pq->cli_inq_tail,
-					pq->cli_outq_head,
-					pq->arb_outq_tail,
-					pq->arb_inq_head,
-					pq->arb_inq_ntc,
-					pq->arb_cacheq_tail,
-					pq->arb_cacheq_head,
-					pq->arb_markq_tail,
-					pq->arb_markq_head,
-					pq->arb_inq_full
-				      );
-			}
-
-			if (now < pq->arb_extract_next) {
-				continue;
-			}
-			pq->arb_extract_next = now + (pspat_arb_interval_ns << 10);
+		while ( (skb = pspat_arb_get_skb(pq)) ) {
+			struct net_device *dev = skb->dev;
+			struct netdev_queue *txq;
+			int rc;
 
 			/* 
-			 * copy the new skbs from pq to our local cache.
+			 * the client chose the txq before sending
+			 * the skb to us, so we only need to recover it
 			 */
-			notempty += !!pspat_arb_fetch(pq);
+			BUG_ON(dev == NULL);
 
-			while ( (skb = pspat_arb_get_skb(pq)) ) {
-				struct net_device *dev = skb->dev;
-				struct netdev_queue *txq;
-				int rc;
+			if (pspat_tc_bypass) {
+				q = &arb->bypass_qdisc;
+			} else {
+				txq = skb_get_tx_queue(dev, skb);
+				q = rcu_dereference_bh(txq->qdisc);
+			}
 
-				/* 
-				 * the client chose the txq before sending
-				 * the skb to us, so we only need to recover it
+			if (unlikely(!q->pspat_owned)) {
+				struct sk_buff *oskb;
+				int can_steal;
+				int j = 0;
+				/* it is the first time we see this Qdisc,
+				 * let us try to steal it from the system
 				 */
-				BUG_ON(dev == NULL);
-
-				if (pspat_tc_bypass) {
-					q = &arb->bypass_qdisc;
-				} else {
-					txq = skb_get_tx_queue(dev, skb);
-					q = rcu_dereference_bh(txq->qdisc);
+				spin_lock(qdisc_lock(q));
+				can_steal = qdisc_run_begin(q);
+				if (can_steal) {
+					set_bit(__QDISC_STATE_DEACTIVATED, &q->state);
 				}
+				spin_unlock(qdisc_lock(q));
 
-				if (unlikely(!q->pspat_owned)) {
-					struct sk_buff *oskb;
-					int can_steal;
-					int j = 0;
-					/* it is the first time we see this Qdisc,
-					 * let us try to steal it from the system
-					 */
-					spin_lock(qdisc_lock(q));
-					can_steal = qdisc_run_begin(q);
-					if (can_steal) {
-						set_bit(__QDISC_STATE_DEACTIVATED, &q->state);
+				if (!can_steal) {
+					if (unlikely(pspat_debug_xmit)) {
+						printk("Cannot steal qdisc %p \n", q);
 					}
-					spin_unlock(qdisc_lock(q));
-
-					if (!can_steal) {
-						if (unlikely(pspat_debug_xmit)) {
-							printk("Cannot steal qdisc %p \n", q);
-						}
-						/* qdisc already running, we have to skip it */
-						kfree_skb(skb);
-						continue;
-					}
-
-					if (q->gso_skb) {
-						kfree_skb(q->gso_skb);
-						q->gso_skb = NULL;
-						q->q.qlen--;
-						j ++;
-					}
-					while ((oskb = q->dequeue(q))) {
-						kfree_skb(oskb);
-						j ++;
-					}
-					printk("Stolen qdisc %p, drained %d skbs\n", q, j);
-
-					/* add to the list of all the Qdiscs we serve
-					 * and initialize the PSPAT-specific fields.
-					 * We leave the QDISC_RUNNING bit set to trick
-					 * the system into ignoring the Qdisc
-					 */
-					q->pspat_owned = 1;
-					q->pspat_next = arb->qdiscs;
-					arb->qdiscs = q;
-					q->pspat_next_link_idle = now;
-					/* XXX temporary workaround to set
-					 * the per-Qdisc parameters
-					 */
-					q->pspat_batch_limit = pspat_qdisc_batch_limit;
-				}
-
-				rc = q->enqueue(skb, q) & NET_XMIT_MASK;
-				if (unlikely(pspat_debug_xmit)) {
-					printk("enq(%p,%p)-->%d\n", q, skb, rc);
-				}
-				if (unlikely(rc)) {
-					pspat_arb_tc_enq_drop ++;
-					/* enqueue frees the skb by itself
-					 * in case of error, so we have nothing
-					 * to do here
-					 */
+					/* qdisc already running, we have to skip it */
+					kfree_skb(skb);
 					continue;
 				}
+
+				if (q->gso_skb) {
+					kfree_skb(q->gso_skb);
+					q->gso_skb = NULL;
+					q->q.qlen--;
+					j ++;
+				}
+				while ((oskb = q->dequeue(q))) {
+					kfree_skb(oskb);
+					j ++;
+				}
+				printk("Stolen qdisc %p, drained %d skbs\n", q, j);
+
+				/* add to the list of all the Qdiscs we serve
+				 * and initialize the PSPAT-specific fields.
+				 * We leave the QDISC_RUNNING bit set to trick
+				 * the system into ignoring the Qdisc
+				 */
+				q->pspat_owned = 1;
+				q->pspat_next = arb->qdiscs;
+				arb->qdiscs = q;
+				q->pspat_next_link_idle = now;
+				/* XXX temporary workaround to set
+				 * the per-Qdisc parameters
+				 */
+				q->pspat_batch_limit = pspat_qdisc_batch_limit;
+			}
+
+			rc = q->enqueue(skb, q) & NET_XMIT_MASK;
+			if (unlikely(pspat_debug_xmit)) {
+				printk("enq(%p,%p)-->%d\n", q, skb, rc);
+			}
+			if (unlikely(rc)) {
+				pspat_arb_tc_enq_drop ++;
+				/* enqueue frees the skb by itself
+				 * in case of error, so we have nothing
+				 * to do here
+				 */
+				continue;
 			}
 		}
-		pspat_rounds[notempty]++;
-		for (q = arb->qdiscs; q; q = q->pspat_next) {
-			int ndeq = 0;
+	}
+	pspat_rounds[notempty]++;
+	for (q = arb->qdiscs; q; q = q->pspat_next) {
+		int ndeq = 0;
 
-			while (q->pspat_next_link_idle <= now &&
-				ndeq < q->pspat_batch_limit)
-		       	{
-				struct pspat_queue *pq;
-				struct sk_buff *skb = q->dequeue(q);
-				// XXX things to do when dequeing:
-				// - q->gso_skb may contain a "requeued"
-				//   packet which should go out first
-				//   (without calling ->dequeue())
-				// - skb that come out of ->dequeue() must
-				//   be "validated" (for segmentation,
-				//   checksumming and so on). I think
-				//   validation may be done in parallel
-				//   in the sender threads.
-				//   (see validate_xmit_skb_list())
+		while (q->pspat_next_link_idle <= now &&
+			ndeq < q->pspat_batch_limit)
+		{
+			struct pspat_queue *pq;
+			struct sk_buff *skb = q->dequeue(q);
+			// XXX things to do when dequeing:
+			// - q->gso_skb may contain a "requeued"
+			//   packet which should go out first
+			//   (without calling ->dequeue())
+			// - skb that come out of ->dequeue() must
+			//   be "validated" (for segmentation,
+			//   checksumming and so on). I think
+			//   validation may be done in parallel
+			//   in the sender threads.
+			//   (see validate_xmit_skb_list())
 
-				if (skb == NULL)
-					break;
-				pspat_arb_tc_deq ++;
-				if (unlikely(pspat_debug_xmit)) {
-					printk("deq(%p)-->%p\n", q, skb);
-				}
-				q->pspat_next_link_idle +=
-					pspat_pkt_pico(pspat_rate, skb->len);
-				ndeq++;
-				BUG_ON(!skb->sender_cpu);
-			        pq = pspat_arb->queues + skb->sender_cpu - 1;
-				switch (pspat_xmit_mode) {
-				case 0:
-					skb = validate_xmit_skb_list(skb, skb->dev);
-					pspat_send(skb);
-					break;
-				case 1:
-					/* validation is done in the sender threads */
-					pspat_mark(pq, skb);
-					break;
-				default:
-					kfree_skb(skb);
-					break;
-				}
+			if (skb == NULL)
+				break;
+			pspat_arb_tc_deq ++;
+			if (unlikely(pspat_debug_xmit)) {
+				printk("deq(%p)-->%p\n", q, skb);
+			}
+			q->pspat_next_link_idle +=
+				pspat_pkt_pico(pspat_rate, skb->len);
+			ndeq++;
+			BUG_ON(!skb->sender_cpu);
+			pq = pspat_arb->queues + skb->sender_cpu - 1;
+			switch (pspat_xmit_mode) {
+			case 0:
+				skb = validate_xmit_skb_list(skb, skb->dev);
+				pspat_send(skb);
+				break;
+			case 1:
+				/* validation is done in the sender threads */
+				pspat_mark(pq, skb);
+				break;
+			default:
+				kfree_skb(skb);
+				break;
 			}
 		}
+	}
 
-		for (i = 0; i < arb->n_queues; i++) {
-			struct pspat_queue *pq = arb->queues + i;
-			pspat_arb_publish(pq); /* to senders */
-			pspat_arb_ack(pq);     /* to clients */
-		}
+	for (i = 0; i < arb->n_queues; i++) {
+		struct pspat_queue *pq = arb->queues + i;
+		pspat_arb_publish(pq); /* to senders */
+		pspat_arb_ack(pq);     /* to clients */
+	}
 
-		rcu_read_unlock_bh();
-		break;
-	} while (!need_resched() && time_before(jiffies, jstop));
+	rcu_read_unlock_bh();
 
 	return 0;
 }
