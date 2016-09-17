@@ -82,12 +82,13 @@ pspat_mark(struct pspat *arb, struct sk_buff *skb)
 {
 	struct netdev_queue *txq = pspat_get_txq(skb);
 
+	BUG_ON(skb->next);
 	if (txq->pspat_markq_tail) {
 		txq->pspat_markq_tail->next = skb;
 	} else {
-		txq->pspat_markq_tail = skb;
 		txq->pspat_markq_head = skb;
 	}
+	txq->pspat_markq_tail = skb;
 	if (list_empty(&txq->pspat_active)) {
 		list_add_tail(&txq->pspat_active, &arb->active_txqs);
 	}
