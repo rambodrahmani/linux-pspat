@@ -131,7 +131,9 @@ pspat_send(struct sk_buff *skb)
 	struct netdev_queue *txq;
 	int ret = NETDEV_TX_BUSY;
 
-	txq = skb_get_tx_queue(dev, skb);
+	txq = pspat_single_txq ? 
+		netdev_get_tx_queue(dev, 0) :
+		skb_get_tx_queue(dev, skb);
 
 	HARD_TX_LOCK(dev, txq, smp_processor_id());
 	if (!netif_xmit_frozen_or_stopped(txq))

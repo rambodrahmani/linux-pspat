@@ -35,6 +35,7 @@ emu_tmr_cb(long unsigned arg)
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
 int pspat_xmit_mode = 0; /* packets sent by the arbiter */
+int pspat_single_txq = 1; /* use only one hw queue */
 int pspat_tc_bypass = 0;
 u64 pspat_rate = 40000000000; // 40Gb/s
 s64 pspat_arb_interval_ns = 1000;
@@ -90,6 +91,15 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.data		= &pspat_xmit_mode,
+		.proc_handler	= &proc_dointvec_minmax,
+		.extra1		= &pspat_zero,
+		.extra2		= &pspat_two,
+	},
+	{
+		.procname	= "single_txq",
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.data		= &pspat_single_txq,
 		.proc_handler	= &proc_dointvec_minmax,
 		.extra1		= &pspat_zero,
 		.extra2		= &pspat_two,

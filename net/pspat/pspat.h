@@ -65,6 +65,7 @@ extern int pspat_enable;
 extern int pspat_debug_xmit;
 extern int pspat_xmit_mode;
 extern int pspat_tc_bypass;
+extern int pspat_single_txq;
 extern u64 pspat_rate;
 extern s64 pspat_arb_interval_ns;
 extern u64 pspat_arb_tc_enq_drop;
