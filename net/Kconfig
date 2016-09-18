@@ -53,6 +53,7 @@ config NET_EGRESS
 
 menu "Networking options"
 
+source "net/pspat/Kconfig"
 source "net/packet/Kconfig"
 source "net/unix/Kconfig"
 source "net/xfrm/Kconfig"

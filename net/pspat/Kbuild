@@ -1,0 +1,3 @@
+obj-$(CONFIG_PSPAT) += pspat.o
+pspat-y = main.o functions.o
+

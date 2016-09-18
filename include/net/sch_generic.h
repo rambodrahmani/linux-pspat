@@ -87,10 +87,12 @@ struct Qdisc {
 
 	struct Qdisc		*next_sched;
 	struct sk_buff		*gso_skb;
-	/* pspat fields */
-	uint64_t		pspat_next_link_idle;
+#ifdef CONFIG_PSPAT
+	int			pspat_owned;
+	struct Qdisc	       *pspat_next;
+	s64			pspat_next_link_idle;
 	uint32_t		pspat_batch_limit;
-	uint32_t		pspat_rate;
+#endif /* CONFIG_PSPAT */
 	/*
 	 * For performance sake on SMP, we put highly modified fields at the end
 	 */
