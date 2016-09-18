@@ -156,7 +156,7 @@ pspat_arb_send(struct netdev_queue *txq)
 
 	if (ret == NETDEV_TX_BUSY) {
 		// XXX we should requeue into the qdisc
-		kfree_skb(skb);
+		kfree_skb_list(skb);
 	} else {
 		pspat_xmit_ok ++;
 	}
