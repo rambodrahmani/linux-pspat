@@ -154,7 +154,7 @@ pspat_arb_send(struct netdev_queue *txq)
 		printk("txq stopped, drop %p\n", skb);
 	HARD_TX_UNLOCK(dev, txq);
 
-	if (ret == NETDEV_TX_BUSY) {
+	if (!dev_xmit_complete(ret)) {
 		// XXX we should requeue into the qdisc
 		kfree_skb_list(skb);
 	} else {
