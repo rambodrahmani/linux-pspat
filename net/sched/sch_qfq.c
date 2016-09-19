@@ -117,7 +117,7 @@
 #define QFQ_MTU_SHIFT		16	/* to support TSO/GSO */
 #define QFQ_MIN_LMAX		512	/* see qfq_slot_insert */
 
-#define QFQ_MAX_AGG_CLASSES	8 /* max num classes per aggregate allowed */
+#define QFQ_MAX_AGG_CLASSES	1 /* max num classes per aggregate allowed */
 
 /*
  * Possible group states.  These values are used as indexes for the bitmaps
