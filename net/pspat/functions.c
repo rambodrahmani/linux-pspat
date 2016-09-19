@@ -67,20 +67,16 @@ pspat_arb_get_skb(struct pspat_queue *pq)
 	return skb;
 }
 
-static struct netdev_queue *
-pspat_get_txq(struct sk_buff *skb)
-{
-	struct net_device *dev = skb->dev;
-	return pspat_single_txq ? 
-		netdev_get_tx_queue(dev, 0) :
-		skb_get_tx_queue(dev, skb);
-}
-
 /* locally mark skb as eligible for transmission */
 static void
 pspat_mark(struct pspat *arb, struct sk_buff *skb)
 {
-	struct netdev_queue *txq = pspat_get_txq(skb);
+	struct netdev_queue *txq;
+
+	if (pspat_single_txq) {
+		skb_set_queue_mapping(skb, 0);
+	}
+	txq = skb_get_tx_queue(skb->dev, skb);
 
 	BUG_ON(skb->next);
 	if (txq->pspat_markq_tail) {
@@ -145,7 +141,6 @@ pspat_arb_send(struct netdev_queue *txq)
 	struct net_device *dev = txq->dev;
 	struct sk_buff *skb = txq->pspat_markq_head;
 	int ret = NETDEV_TX_BUSY;
-
 
 	HARD_TX_LOCK(dev, txq, smp_processor_id());
 	if (!netif_xmit_frozen_or_stopped(txq))
