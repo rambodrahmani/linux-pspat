@@ -1,9 +1,7 @@
 #ifndef __PSPAT_H__
 #define __PSPAT_H__
 
-#include "mailbox.h"
-
-#define PSPAT_QLEN           512
+#include <linux/mailbox.h>
 
 struct pspat_queue {
 	/* Input queue, written by clients, read by the arbiter. */
