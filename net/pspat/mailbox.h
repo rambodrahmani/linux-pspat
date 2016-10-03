@@ -68,7 +68,7 @@ void pspat_mb_delete(struct pspat_mailbox *m);
  * @m: the mailbox where to enqueue
  * @v: the value to be enqueued
  *
- * Returns 0 on success, -ENOMEM on failure.
+ * Returns 0 on success, -ENOBUFS on failure.
  */
 static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
 {
@@ -76,7 +76,7 @@ static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
 
 	if (unlikely(m->prod_write == m->prod_check)) {
 		if (*h)
-			return -ENOMEM;
+			return -ENOBUFS;
 		m->prod_check += m->line_size;
 		prefetch(h + m->line_size);
 	}
