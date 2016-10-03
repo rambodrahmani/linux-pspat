@@ -43,7 +43,6 @@ pspat_mb_init(struct pspat_mailbox *m, unsigned long entries,
 	
 	m->cons_pi = 0;
 	m->cons_ci = m->line_size;
-	m->cons_ntc = 0;
 	m->prod_pi = m->line_size;
 	m->prod_ci = 2 * m->line_size;
 
