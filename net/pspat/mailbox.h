@@ -15,13 +15,13 @@ struct pspat_mailbox {
 
 	/* producer fields */
 	START_NEW_CACHELINE
-	unsigned long		prod_pi;
-	unsigned long		prod_ci;
+	unsigned long		prod_write;
+	unsigned long		prod_check;
 
 	/* consumer fields */
 	START_NEW_CACHELINE
-	unsigned long		cons_pi;
-	unsigned long		cons_ci;
+	unsigned long		cons_clear;
+	unsigned long		cons_read;
 
 	/* the queue */
 	START_NEW_CACHELINE
@@ -72,22 +72,22 @@ void pspat_mb_delete(struct pspat_mailbox *m);
  */
 static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
 {
-	uintptr_t *h = &m->q[m->prod_pi & m->size_mask];
+	uintptr_t *h = &m->q[m->prod_write & m->size_mask];
 
-	if (unlikely(m->prod_pi == m->prod_ci)) {
+	if (unlikely(m->prod_write == m->prod_check)) {
 		if (*h)
 			return -ENOMEM;
-		m->prod_ci += m->line_size;
+		m->prod_check += m->line_size;
 		prefetch(h + m->line_size);
 	}
-	*h = (uintptr_t)v | ((m->prod_pi >> m->size_shift) & 0x1);
-	m->prod_pi++;
+	*h = (uintptr_t)v | ((m->prod_write >> m->size_shift) & 0x1);
+	m->prod_write++;
 	return 0;
 }
 
 static inline int __pspat_mb_empty(struct pspat_mailbox *m, uintptr_t v)
 {
-	return (!v) || ((v ^ (m->cons_ci >> m->size_shift)) & 0x1);
+	return (!v) || ((v ^ (m->cons_read >> m->size_shift)) & 0x1);
 }
 
 /**
@@ -98,7 +98,7 @@ static inline int __pspat_mb_empty(struct pspat_mailbox *m, uintptr_t v)
  */
 static inline int pspat_mb_empty(struct pspat_mailbox *m)
 {
-	uintptr_t v = m->q[m->cons_ci & m->size_mask];
+	uintptr_t v = m->q[m->cons_read & m->size_mask];
 
 	return __pspat_mb_empty(m, v);
 }
@@ -113,12 +113,12 @@ static inline int pspat_mb_empty(struct pspat_mailbox *m)
  */
 static inline void *pspat_mb_extract(struct pspat_mailbox *m)
 {
-	uintptr_t v = m->q[m->cons_ci & m->size_mask];
+	uintptr_t v = m->q[m->cons_read & m->size_mask];
 
 	if (__pspat_mb_empty(m, v))
 		return NULL;
 
-	m->cons_ci++;
+	m->cons_read++;
 	return (void *)(v & ~0x1);
 }
 
@@ -130,10 +130,10 @@ static inline void *pspat_mb_extract(struct pspat_mailbox *m)
  */
 static inline void pspat_mb_clear(struct pspat_mailbox *m)
 {
-	unsigned long s = m->cons_ci & ~m->line_mask;
+	unsigned long s = m->cons_read & ~m->line_mask;
 
-	for ( ; (m->cons_pi & ~m->line_mask) != s; m->cons_pi += m->line_size) {
-		m->q[m->cons_pi & m->size_mask] = 0;
+	for ( ; (m->cons_clear & ~m->line_mask) != s; m->cons_clear += m->line_size) {
+		m->q[m->cons_clear & m->size_mask] = 0;
 	}
 }
 
