@@ -134,7 +134,7 @@ static inline void pspat_mb_clear(struct pspat_mailbox *m)
 	unsigned long s = m->cons_ci & ~m->line_mask;
 
 	for ( ; (m->cons_pi & ~m->line_mask) != s; m->cons_pi += m->line_size) {
-		m->q[m->cons_pi & m->line_mask] = 0;
+		m->q[m->cons_pi & m->size_mask] = 0;
 	}
 }
 
