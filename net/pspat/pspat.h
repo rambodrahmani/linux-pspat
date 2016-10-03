@@ -1,40 +1,15 @@
 #ifndef __PSPAT_H__
 #define __PSPAT_H__
 
-#define START_NEW_CACHELINE	____cacheline_aligned_in_smp
+#include "mailbox.h"
 
 #define PSPAT_QLEN           512
 
 struct pspat_queue {
 	/* Input queue, written by clients, read by the arbiter. */
-	START_NEW_CACHELINE
-	struct sk_buff		*inq[PSPAT_QLEN];
+	struct pspat_mailbox   *inq;
 
-	/* Data structures private to the clients. */
-	START_NEW_CACHELINE
-	uint32_t		cli_inq_tail; /* insertion point in inq  */
-	uint32_t		cli_outq_head; /* extraction point from outq */
-
-	/* Output queue, written by the arbiter, read by senders. */
-	START_NEW_CACHELINE
-	struct sk_buff		*outq[PSPAT_QLEN];
-
-	/* Data structures private to the arbiter. */
-	START_NEW_CACHELINE
-	uint32_t		arb_outq_tail; /* insertion point in outq  */
-	uint32_t		arb_inq_head; /* extraction point from inq */
-	uint32_t		arb_inq_ntc;  /* next to clean */
-	uint32_t		arb_cacheq_tail;
-	uint32_t		arb_cacheq_head;
 	s64			arb_extract_next;
-	int			arb_inq_full;
-
-	struct sk_buff		*cacheq[PSPAT_QLEN];
-	struct sk_buff		*markq[PSPAT_QLEN];
-
-	/* Data structures private to the sender. */
-	START_NEW_CACHELINE
-	uint32_t		snd_outq_head; /* extraction point from outq  */
 };
 
 struct pspat {

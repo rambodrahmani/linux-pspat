@@ -13,15 +13,7 @@
 static int
 pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 {
-	uint32_t tail = pq->cli_inq_tail;
-
-	if (pq->inq[tail])
-		return -ENOBUFS;
-	pq->inq[tail] = skb;
-
-	pspat_next(pq->cli_inq_tail);
-
-	return 0;
+	return pspat_mb_insert(pq->inq, skb);
 }
 
 /* copy new skbs from client queue to local queue
@@ -31,40 +23,14 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 static int
 pspat_arb_fetch(struct pspat_queue *pq)
 {
-	uint32_t head = pq->arb_inq_head;
-	uint32_t tail = pq->arb_cacheq_tail;
-	uint32_t head_first = head;
-	int n = 0;
-
-	/* cacheq should always be empty at this point */
-	while (pq->inq[head]) {
-		n++;
-		pq->cacheq[tail] = pq->inq[head];
-		
-		pspat_next(head);
-		pspat_next(tail);
-		if (unlikely(head == head_first)) {
-			pq->arb_inq_full = 1;
-			break;
-		}
-	}
-	pq->arb_inq_head = head;
-	pq->arb_cacheq_tail = tail;
-
-	return n;
+	return !pspat_mb_empty(pq->inq);
 }
 
 /* extract skb from the local queue */
 static struct sk_buff *
 pspat_arb_get_skb(struct pspat_queue *pq)
 {
-	uint32_t head = pq->arb_cacheq_head;
-	struct sk_buff *skb = pq->cacheq[head];
-	if (skb) {
-		pq->cacheq[head] = NULL;
-		pspat_next(pq->arb_cacheq_head);
-	}
-	return skb;
+	return pspat_mb_extract(pq->inq);
 }
 
 /* locally mark skb as eligible for transmission */
@@ -124,15 +90,7 @@ pspat_arb_publish(struct netdev_queue *txq)
 static void
 pspat_arb_ack(struct pspat_queue *pq)
 {
-	uint32_t ntc = pq->arb_inq_ntc;
-	uint32_t head = pq->arb_inq_head;
-
-	while (ntc != head || pq->arb_inq_full) {
-		pq->inq[ntc] = NULL;
-		pspat_next(ntc);
-		pq->arb_inq_full = 0;
-	}
-	pq->arb_inq_ntc = ntc;
+	pspat_mb_clear(pq->inq);
 }
 
 static void
@@ -177,20 +135,6 @@ pspat_do_arbiter(struct pspat *arb)
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
 		struct sk_buff *skb;
-
-		if (unlikely(pspat_debug_xmit)) {
-			printk("Queue #%d: %u %u %u %u %u %u %u %u\n",
-				i,
-				pq->cli_inq_tail,
-				pq->cli_outq_head,
-				pq->arb_outq_tail,
-				pq->arb_inq_head,
-				pq->arb_inq_ntc,
-				pq->arb_cacheq_tail,
-				pq->arb_cacheq_head,
-				pq->arb_inq_full
-			      );
-		}
 
 		if (now < pq->arb_extract_next) {
 			continue;

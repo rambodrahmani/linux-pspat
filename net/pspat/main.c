@@ -33,6 +33,8 @@ u32 pspat_qdisc_batch_limit = 40;
 u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_tc_deq = 0;
 u64 pspat_xmit_ok = 0;
+u64 pspat_mailbox_size = 512;
+u64 pspat_mailbox_line_size = 128;
 u64 *pspat_rounds;
 static int pspat_zero = 0;
 static int pspat_one = 1;
@@ -41,6 +43,7 @@ static unsigned long pspat_ulongzero = 0UL;
 static unsigned long pspat_ulongone = 1UL;
 static unsigned long pspat_ulongmax = (unsigned long)-1;
 static struct ctl_table_header *pspat_sysctl_hdr;
+static unsigned long pspat_pages;
 
 static struct ctl_table pspat_static_ctl[] = {
 	{
@@ -157,6 +160,24 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
 		.data		= &pspat_xmit_ok,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "mailbox_size",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_mailbox_size,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "mailbox_line_size",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_mailbox_line_size,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
 		.extra2		= &pspat_ulongmax,
@@ -298,7 +319,7 @@ pspat_release(struct inode *inode, struct file *f)
 		synchronize_rcu();
 
 		pspat_shutdown(arb);
-		kfree(arb);
+		free_pages((unsigned long)arb, order_base_2(pspat_pages));
 
 		f->private_data = NULL;
 		printk("PSPAT arbiter destroyed\n");
@@ -326,14 +347,22 @@ pspat_bypass_dequeue(struct Qdisc *q)
 static int
 pspat_create(struct file *f, unsigned int cmd)
 {
-	int cpus = num_online_cpus();
+	int cpus = num_online_cpus(), i;
 	struct pspat *arb;
+	struct pspat_mailbox *m;
+	unsigned long mb_entries, mb_line_size;
+	size_t mb_size, arb_size;
 
 	if (cmd < cpus) {
 		/* Create a transmitter thread. */
 		f->private_data = f;
 		return 0;
 	}
+	
+	/* get the current value of the mailbox parameters */
+	mb_entries = pspat_mailbox_size;
+	mb_line_size = pspat_mailbox_line_size;
+	mb_size = pspat_mb_size(mb_entries);
 
 	/* Create the arbiter on demand. */
 	mutex_lock(&pspat_glock);
@@ -344,15 +373,31 @@ pspat_create(struct file *f, unsigned int cmd)
 		return -EBUSY;
 	}
 
-	arb = kzalloc(sizeof(*arb) +
-			    cpus * sizeof(*arb->queues),
-			    GFP_KERNEL);
+	arb_size = roundup(sizeof(*arb) + cpus * sizeof(*arb->queues),
+			INTERNODE_CACHE_BYTES);
+	pspat_pages = DIV_ROUND_UP(arb_size + mb_size * cpus, PAGE_SIZE);
+
+	arb = (struct pspat *)__get_free_pages(GFP_KERNEL, order_base_2(pspat_pages));
 	if (!arb) {
 		mutex_unlock(&pspat_glock);
 		return -ENOMEM;
 	}
+	memset(arb, 0, PAGE_SIZE * pspat_pages);
 	f->private_data = arb;
 	arb->n_queues = cpus;
+
+	/* initialize all mailboxes */
+	m = (void *)arb + arb_size;
+	for (i = 0; i < cpus; i++) {
+		int err = pspat_mb_init(m, mb_entries, mb_line_size);
+		if (err) {
+			free_pages((unsigned long)arb, order_base_2(pspat_pages));
+			mutex_unlock(&pspat_glock);
+			return err;
+		}
+		arb->queues[i].inq = m;
+		m = (void *)m + mb_size;
+	}
 
 	/* Initialize bypass qdisc. */
 	arb->bypass_qdisc.enqueue = pspat_bypass_enqueue;
