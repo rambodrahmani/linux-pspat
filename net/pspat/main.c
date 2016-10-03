@@ -167,7 +167,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	{
 		.procname	= "mailbox_size",
 		.maxlen		= sizeof(u64),
-		.mode		= 0444,
+		.mode		= 0644,
 		.data		= &pspat_mailbox_size,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
@@ -176,7 +176,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	{
 		.procname	= "mailbox_line_size",
 		.maxlen		= sizeof(u64),
-		.mode		= 0444,
+		.mode		= 0644,
 		.data		= &pspat_mailbox_line_size,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
