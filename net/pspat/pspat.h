@@ -20,6 +20,8 @@ struct pspat_queue {
 };
 
 struct pspat {
+	struct task_struct	*task;
+
 	/* to notify arbiter, currently unused. */
 	wait_queue_head_t	wqh;
 

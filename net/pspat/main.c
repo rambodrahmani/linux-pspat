@@ -1,8 +1,6 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/aio.h>
-#include <linux/miscdevice.h>
-#include <linux/poll.h>
 #include <linux/moduleparam.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
@@ -14,6 +12,7 @@
 #include <linux/netdevice.h>
 #include <net/sch_generic.h>
 #include <linux/rcupdate.h>
+#include <linux/kthread.h>
 
 #include "pspat.h"
 
@@ -293,24 +292,58 @@ extern int (*pspat_handler)(struct sk_buff *, struct Qdisc *,
 			    struct netdev_queue *);
 
 static int
-pspat_open(struct inode *inode, struct file *f)
+arb_worker_func(void *data)
 {
-	/* Do nothing, initialization is on-demand. */
-	f->private_data = NULL;
+	struct pspat *arb = (struct pspat *)data;
+	bool arb_registered = false;
+
+	printk("PSPAT starting arbiter\n");
+
+	while (!kthread_should_stop()) {
+		if (!pspat_enable) {
+			if (arb_registered) {
+				mutex_lock(&pspat_glock);
+				pspat_shutdown(arb);
+				rcu_assign_pointer(pspat_arb, NULL);
+				synchronize_rcu();
+				mutex_unlock(&pspat_glock);
+				arb_registered = false;
+				printk("arbiter unregistered\n");
+			}
+
+			printk("PSPAT sleeping...\n");
+			msleep_interruptible(2000);
+
+		} else {
+			if (!arb_registered) {
+				/* Register the arbiter. */
+				mutex_lock(&pspat_glock);
+				rcu_assign_pointer(pspat_arb, arb);
+				synchronize_rcu();
+				mutex_unlock(&pspat_glock);
+				arb_registered = true;
+				printk("arbiter registered\n");
+			}
+			set_current_state(TASK_INTERRUPTIBLE);
+			pspat_do_arbiter(arb);
+			if (need_resched()) {
+				schedule_timeout(1);
+			}
+		}
+	}
+
+	set_current_state(TASK_RUNNING);
+
+	printk("PSPAT arbiter stopped\n");
 
 	return 0;
 }
 
 static int
-pspat_release(struct inode *inode, struct file *f)
+pspat_destroy(void)
 {
-	if (!f->private_data) {
-		/* Nothing was created, nothing to destroy. */
-		return 0;
-	}
-
 	mutex_lock(&pspat_glock);
-	if (f->private_data == pspat_arb) {
+	if (pspat_arb) {
 		/* Destroy arbiter. */
 		struct pspat *arb = pspat_arb;
 
@@ -318,17 +351,30 @@ pspat_release(struct inode *inode, struct file *f)
 		rcu_assign_pointer(pspat_arb, NULL);
 		synchronize_rcu();
 
+		kthread_stop(arb->task);
+
 		pspat_shutdown(arb);
 		free_pages((unsigned long)arb, order_base_2(pspat_pages));
 
-		f->private_data = NULL;
 		printk("PSPAT arbiter destroyed\n");
-
-	} else {
-		/* Destroy transmitter. */
 	}
 	mutex_unlock(&pspat_glock);
 
+	return 0;
+}
+
+int
+pspat_create_client_queue(void)
+{
+	struct pspat_mailbox *m;
+
+	if (current->pspat_mb)
+		return 0;
+
+	m = pspat_mb_new(pspat_mailbox_size, pspat_mailbox_line_size);
+	if (m == NULL)
+		return -ENOMEM;
+	current->pspat_mb = m;
 	return 0;
 }
 
@@ -345,20 +391,15 @@ pspat_bypass_dequeue(struct Qdisc *q)
 }
 
 static int
-pspat_create(struct file *f, unsigned int cmd)
+pspat_create(void)
 {
 	int cpus = num_online_cpus(), i;
 	struct pspat *arb;
 	struct pspat_mailbox *m;
 	unsigned long mb_entries, mb_line_size;
 	size_t mb_size, arb_size;
+	int ret;
 
-	if (cmd < cpus) {
-		/* Create a transmitter thread. */
-		f->private_data = f;
-		return 0;
-	}
-	
 	/* get the current value of the mailbox parameters */
 	mb_entries = pspat_mailbox_size;
 	mb_line_size = pspat_mailbox_line_size;
@@ -383,17 +424,14 @@ pspat_create(struct file *f, unsigned int cmd)
 		return -ENOMEM;
 	}
 	memset(arb, 0, PAGE_SIZE * pspat_pages);
-	f->private_data = arb;
 	arb->n_queues = cpus;
 
 	/* initialize all mailboxes */
 	m = (void *)arb + arb_size;
 	for (i = 0; i < cpus; i++) {
-		int err = pspat_mb_init(m, mb_entries, mb_line_size);
-		if (err) {
-			free_pages((unsigned long)arb, order_base_2(pspat_pages));
-			mutex_unlock(&pspat_glock);
-			return err;
+		ret = pspat_mb_init(m, mb_entries, mb_line_size);
+		if (ret ) {
+			goto fail;
 		}
 		arb->queues[i].inq = m;
 		INIT_LIST_HEAD(&arb->queues[i].mb_to_clear);
@@ -412,93 +450,26 @@ pspat_create(struct file *f, unsigned int cmd)
 
 	INIT_LIST_HEAD(&arb->active_txqs);
 
-	/* Register the arbiter. */
-	rcu_assign_pointer(pspat_arb, arb);
-	synchronize_rcu();
+	arb->task = kthread_create(arb_worker_func, arb, "pspat-arb");
+	if (IS_ERR(arb->task)) {
+		ret = -PTR_ERR(arb->task);
+		goto fail;
+	}
+
+	wake_up_process(arb->task);
+
 	printk("PSPAT arbiter created with %d per-core queues\n",
 	       arb->n_queues);
 
 	mutex_unlock(&pspat_glock);
 
 	return 0;
+fail:
+	free_pages((unsigned long)arb, order_base_2(pspat_pages));
+	mutex_unlock(&pspat_glock);
+
+	return ret;
 }
-
-int
-pspat_create_client_queue(void)
-{
-	struct pspat_mailbox *m;
-
-	if (current->pspat_mb)
-		return 0;
-
-	m = pspat_mb_new(pspat_mailbox_size, pspat_mailbox_line_size);
-	if (m == NULL)
-		return -ENOMEM;
-	current->pspat_mb = m;
-	return 0;
-}
-
-static long
-pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
-{
-	DECLARE_WAITQUEUE(wait, current);
-	bool blocking = false;
-
-	if (f->private_data == NULL) {
-		/* We need to create something on demand. */
-		int ret = pspat_create(f, cmd);
-
-		if (ret) {
-			return ret;
-		}
-	}
-
-	if (blocking) {
-		add_wait_queue(&pspat_arb->wqh, &wait);
-	}
-
-	for (;;) {
-		/* Wait for a notification or a signal. */
-		if (need_resched()) {
-			current->state = TASK_INTERRUPTIBLE;
-			schedule_timeout(1);
-			current->state = TASK_RUNNING;
-		}
-
-		if (signal_pending(current)) {
-			printk("Got a signal, returning to userspace\n");
-			break;
-		}
-
-		if (f->private_data == pspat_arb) {
-			/* Invoke the arbiter. */
-			pspat_do_arbiter(pspat_arb);
-		} else {
-			/* Invoke the transmitter. */
-			pspat_do_sender(pspat_arb);
-		}
-	}
-
-	if (blocking) {
-		remove_wait_queue(&pspat_arb->wqh, &wait);
-	}
-
-	return 0;
-}
-
-static const struct file_operations pspat_fops = {
-	.owner          = THIS_MODULE,
-	.release        = pspat_release,
-	.open           = pspat_open,
-	.unlocked_ioctl = pspat_ioctl,
-	.llseek         = noop_llseek,
-};
-
-static struct miscdevice pspat_misc = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "pspat",
-	.fops = &pspat_fops,
-};
 
 static int __init
 pspat_init(void)
@@ -511,23 +482,30 @@ pspat_init(void)
 		return ret;
 	}
 
-	ret = misc_register(&pspat_misc);
+	ret = pspat_create();
 	if (ret) {
-		printk("Failed to register rlite misc device\n");
-		return ret;
+		printk("Failed to create arbiter\n");
+		goto err1;
 	}
 
 	return 0;
+err1:
+	pspat_sysctl_fini();
+
+	return ret;
 }
 
 static void __exit
 pspat_fini(void)
 {
-	misc_deregister(&pspat_misc);
+	pspat_destroy();
 	pspat_sysctl_fini();
 }
 
 module_init(pspat_init);
 module_exit(pspat_fini);
-MODULE_LICENSE("GPL");
+
+MODULE_LICENSE("Dual BSD/GPL");
+MODULE_AUTHOR("Giuseppe Lettieri <g.lettieri@iet.unipi.it");
 MODULE_AUTHOR("Vincenzo Maffione <v.maffione@gmail.com>");
+MODULE_AUTHOR("Luigi Rizzo <rizzo@iet.unipi.it>");

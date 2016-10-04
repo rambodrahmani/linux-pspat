@@ -448,8 +448,7 @@ retry:
 	}
 }
 
-
-/* Function implementing the arbiter. */
+/* Function implementing the transmitter. */
 int
 pspat_do_sender(struct pspat *arb)
 {
