@@ -390,6 +390,9 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	tsk->splice_pipe = NULL;
 	tsk->task_frag.page = NULL;
 	tsk->wake_q.next = NULL;
+#ifdef CONFIG_PSPAT
+	tsk->pspat_mb = NULL;
+#endif
 
 	account_kernel_stack(ti, 1);
 

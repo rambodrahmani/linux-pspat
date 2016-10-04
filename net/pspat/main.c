@@ -396,6 +396,7 @@ pspat_create(struct file *f, unsigned int cmd)
 			return err;
 		}
 		arb->queues[i].inq = m;
+		INIT_LIST_HEAD(&arb->queues[i].mb_to_clear);
 		m = (void *)m + mb_size;
 	}
 
@@ -419,6 +420,21 @@ pspat_create(struct file *f, unsigned int cmd)
 
 	mutex_unlock(&pspat_glock);
 
+	return 0;
+}
+
+int
+pspat_create_client_queue(void)
+{
+	struct pspat_mailbox *m;
+
+	if (current->pspat_mb)
+		return 0;
+
+	m = pspat_mb_new(pspat_mailbox_size, pspat_mailbox_line_size);
+	if (m == NULL)
+		return -ENOMEM;
+	current->pspat_mb = m;
 	return 0;
 }
 

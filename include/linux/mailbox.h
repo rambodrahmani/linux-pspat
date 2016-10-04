@@ -22,6 +22,7 @@ struct pspat_mailbox {
 	START_NEW_CACHELINE
 	unsigned long		cons_clear;
 	unsigned long		cons_read;
+	struct list_head	list;
 
 	/* the queue */
 	START_NEW_CACHELINE

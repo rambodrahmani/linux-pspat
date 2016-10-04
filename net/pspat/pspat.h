@@ -3,11 +3,20 @@
 
 #include <linux/mailbox.h>
 
+/* per-cpu data structure */
 struct pspat_queue {
 	/* Input queue, written by clients, read by the arbiter. */
 	struct pspat_mailbox   *inq;
 
+	/* client fields */
+	START_NEW_CACHELINE
+	struct pspat_mailbox   *cli_last_mb;
+
+	/* arbiter fields */
+	START_NEW_CACHELINE
 	s64			arb_extract_next;
+	struct pspat_mailbox   *arb_last_mb;
+	struct list_head	mb_to_clear;
 };
 
 struct pspat {
@@ -32,6 +41,8 @@ int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 void pspat_shutdown(struct pspat *arb);
 
 int pspat_do_sender(struct pspat *arb);
+
+int pspat_create_client_queue(void);
 
 extern int pspat_enable;
 extern int pspat_debug_xmit;

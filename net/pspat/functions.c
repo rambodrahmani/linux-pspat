@@ -13,7 +13,42 @@
 static int
 pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 {
-	return pspat_mb_insert(pq->inq, skb);
+	struct pspat_mailbox *m;
+	int err;
+
+	if (unlikely(current->pspat_mb == NULL)) {
+		err = pspat_create_client_queue();
+		if (err)
+			return err;
+	}
+	m = current->pspat_mb;
+	err = pspat_mb_insert(m, skb);
+	if (err)
+		return err;
+	if (pq->cli_last_mb != m) {
+		smp_mb();
+		err = pspat_mb_insert(pq->inq, m);
+		if (err)
+			return err;
+		pq->cli_last_mb = m;
+	}
+	return 0;
+}
+
+static struct pspat_mailbox *
+pspat_arb_get_mb(struct pspat_queue *pq)
+{
+	struct pspat_mailbox *m = pq->arb_last_mb;
+
+	if (m == NULL || pspat_mb_empty(m)) {
+		smp_mb();
+		m = pspat_mb_extract(pq->inq);
+		if (m) {
+			pspat_mb_clear(pq->inq);
+			pq->arb_last_mb = m;
+		}
+	}
+	return m;
 }
 
 /* copy new skbs from client queue to local queue
@@ -23,14 +58,36 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 static int
 pspat_arb_fetch(struct pspat_queue *pq)
 {
-	return !pspat_mb_empty(pq->inq);
+	struct pspat_mailbox *m = pspat_arb_get_mb(pq);
+	if (m == NULL)
+		return 0;
+	return !pspat_mb_empty(m);
 }
 
 /* extract skb from the local queue */
 static struct sk_buff *
 pspat_arb_get_skb(struct pspat_queue *pq)
 {
-	return pspat_mb_extract(pq->inq);
+	struct pspat_mailbox *m;
+	struct sk_buff *skb;
+
+retry:
+	m = pspat_arb_get_mb(pq);
+	if (m == NULL)
+		return NULL;
+	skb = pspat_mb_extract(m);
+	if (skb) {
+		if (unlikely(skb == (void *)0x2)) {
+			pspat_mb_delete(m);
+			pq->arb_last_mb = NULL;
+			goto retry;
+		}
+
+		if (list_empty(&m->list)) {
+			list_add_tail(&m->list, &pq->mb_to_clear);
+		}
+	}
+	return skb;
 }
 
 /* locally mark skb as eligible for transmission */
@@ -90,7 +147,13 @@ pspat_arb_publish(struct netdev_queue *txq)
 static void
 pspat_arb_ack(struct pspat_queue *pq)
 {
-	pspat_mb_clear(pq->inq);
+	struct pspat_mailbox *mb_cursor, *mb_next;
+
+	list_for_each_entry_safe(mb_cursor, mb_next,
+			&pq->mb_to_clear, list) {
+		pspat_mb_clear(mb_cursor);
+		list_del_init(&mb_cursor->list);
+	}
 }
 
 static void
@@ -295,15 +358,25 @@ pspat_do_arbiter(struct pspat *arb)
 void
 pspat_shutdown(struct pspat *arb)
 {
-	struct Qdisc *q, **pq;
+	struct Qdisc *q, **_q;
+	int i;
 
-	for (pq = &arb->qdiscs, q = *pq; q; pq = &q->pspat_next, q = *pq) {
+	for (i = 0; i < arb->n_queues; i++) {
+		struct pspat_queue *pq = arb->queues + i;
+		struct sk_buff *skb;
+
+		while ( (skb = pspat_arb_get_skb(pq)) ) {
+			kfree_skb(skb);
+		}
+	}
+
+	for (_q = &arb->qdiscs, q = *_q; q; _q = &q->pspat_next, q = *_q) {
 		spin_lock(qdisc_lock(q));
 		qdisc_run_end(q);
 		clear_bit(__QDISC_STATE_DEACTIVATED, &q->state);
 		spin_unlock(qdisc_lock(q));
 		q->pspat_owned = 0;
-		*pq = NULL;
+		*_q = NULL;
 	}
 }
 
@@ -338,6 +411,43 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	}
 	return rc;
 }
+
+void
+exit_pspat(void)
+{
+	struct pspat *arb;
+	struct pspat_queue *pq;
+	int cpu;
+
+	if (current->pspat_mb == NULL)
+		return;
+
+retry:
+	rcu_read_lock();
+	arb = rcu_dereference(pspat_arb);
+	if (arb) {
+		/* let the arbiter free the queue */
+		cpu = get_cpu();
+		pq = arb->queues + cpu;
+		if (pspat_cli_push(pq, (void *)0x2) == 0) {
+			printk("client %p: delegated destruction of %p to arbiter\n", current, current->pspat_mb);
+			current->pspat_mb = NULL;
+		}
+		put_cpu();
+	}
+	rcu_read_unlock();
+	if (current->pspat_mb) {
+		if (arb) {
+			schedule_timeout(100);
+			goto retry;
+		} else {
+			pspat_mb_delete(current->pspat_mb);
+			printk("client %p: deleted %p\n", current, current->pspat_mb);
+			current->pspat_mb = NULL;
+		}
+	}
+}
+
 
 /* Function implementing the arbiter. */
 int

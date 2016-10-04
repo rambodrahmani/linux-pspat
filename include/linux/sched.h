@@ -1462,6 +1462,10 @@ struct task_struct {
 #if defined(SPLIT_RSS_COUNTING)
 	struct task_rss_stat	rss_stat;
 #endif
+
+#ifdef CONFIG_PSPAT
+	struct pspat_mailbox *pspat_mb;
+#endif
 /* task state */
 	int exit_state;
 	int exit_code, exit_signal;
