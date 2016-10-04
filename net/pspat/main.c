@@ -18,7 +18,8 @@
 
 
 DEFINE_MUTEX(pspat_glock);
-struct pspat *pspat_arb;
+struct pspat *pspat_arb;  /* RCU-dereferenced */
+static struct pspat *arbp; /* For internal usage */
 
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
@@ -297,8 +298,6 @@ arb_worker_func(void *data)
 	struct pspat *arb = (struct pspat *)data;
 	bool arb_registered = false;
 
-	printk("PSPAT starting arbiter\n");
-
 	while (!kthread_should_stop()) {
 		if (!pspat_enable) {
 			if (arb_registered) {
@@ -308,10 +307,9 @@ arb_worker_func(void *data)
 				synchronize_rcu();
 				mutex_unlock(&pspat_glock);
 				arb_registered = false;
-				printk("arbiter unregistered\n");
+				printk("PSPAT arbiter unregistered\n");
 			}
 
-			printk("PSPAT sleeping...\n");
 			msleep_interruptible(2000);
 
 		} else {
@@ -322,7 +320,7 @@ arb_worker_func(void *data)
 				synchronize_rcu();
 				mutex_unlock(&pspat_glock);
 				arb_registered = true;
-				printk("arbiter registered\n");
+				printk("PSPAT arbiter registered\n");
 			}
 			set_current_state(TASK_INTERRUPTIBLE);
 			pspat_do_arbiter(arb);
@@ -334,8 +332,6 @@ arb_worker_func(void *data)
 
 	set_current_state(TASK_RUNNING);
 
-	printk("PSPAT arbiter stopped\n");
-
 	return 0;
 }
 
@@ -343,21 +339,19 @@ static int
 pspat_destroy(void)
 {
 	mutex_lock(&pspat_glock);
-	if (pspat_arb) {
-		/* Destroy arbiter. */
-		struct pspat *arb = pspat_arb;
+	BUG_ON(arbp == NULL);
 
-		/* Unregister the arbiter. */
-		rcu_assign_pointer(pspat_arb, NULL);
-		synchronize_rcu();
+	/* Unregister the arbiter. */
+	rcu_assign_pointer(pspat_arb, NULL);
+	synchronize_rcu();
 
-		kthread_stop(arb->task);
+	kthread_stop(arbp->task);
 
-		pspat_shutdown(arb);
-		free_pages((unsigned long)arb, order_base_2(pspat_pages));
+	pspat_shutdown(arbp);
+	free_pages((unsigned long)arbp, order_base_2(pspat_pages));
+	arbp = NULL;
 
-		printk("PSPAT arbiter destroyed\n");
-	}
+	printk("PSPAT arbiter destroyed\n");
 	mutex_unlock(&pspat_glock);
 
 	return 0;
@@ -394,7 +388,6 @@ static int
 pspat_create(void)
 {
 	int cpus = num_online_cpus(), i;
-	struct pspat *arb;
 	struct pspat_mailbox *m;
 	unsigned long mb_entries, mb_line_size;
 	size_t mb_size, arb_size;
@@ -407,65 +400,60 @@ pspat_create(void)
 
 	/* Create the arbiter on demand. */
 	mutex_lock(&pspat_glock);
-	if (pspat_arb) {
-		mutex_unlock(&pspat_glock);
-		printk("PSPAT arbiter already exists\n");
+	BUG_ON(arbp != NULL);
 
-		return -EBUSY;
-	}
-
-	arb_size = roundup(sizeof(*arb) + cpus * sizeof(*arb->queues),
+	arb_size = roundup(sizeof(*arbp) + cpus * sizeof(*arbp->queues),
 			INTERNODE_CACHE_BYTES);
 	pspat_pages = DIV_ROUND_UP(arb_size + mb_size * cpus, PAGE_SIZE);
 
-	arb = (struct pspat *)__get_free_pages(GFP_KERNEL, order_base_2(pspat_pages));
-	if (!arb) {
+	arbp = (struct pspat *)__get_free_pages(GFP_KERNEL, order_base_2(pspat_pages));
+	if (!arbp) {
 		mutex_unlock(&pspat_glock);
 		return -ENOMEM;
 	}
-	memset(arb, 0, PAGE_SIZE * pspat_pages);
-	arb->n_queues = cpus;
+	memset(arbp, 0, PAGE_SIZE * pspat_pages);
+	arbp->n_queues = cpus;
 
 	/* initialize all mailboxes */
-	m = (void *)arb + arb_size;
+	m = (void *)arbp + arb_size;
 	for (i = 0; i < cpus; i++) {
 		ret = pspat_mb_init(m, mb_entries, mb_line_size);
 		if (ret ) {
 			goto fail;
 		}
-		arb->queues[i].inq = m;
-		INIT_LIST_HEAD(&arb->queues[i].mb_to_clear);
+		arbp->queues[i].inq = m;
+		INIT_LIST_HEAD(&arbp->queues[i].mb_to_clear);
 		m = (void *)m + mb_size;
 	}
 
 	/* Initialize bypass qdisc. */
-	arb->bypass_qdisc.enqueue = pspat_bypass_enqueue;
-	arb->bypass_qdisc.dequeue = pspat_bypass_dequeue;
-	skb_queue_head_init(&arb->bypass_qdisc.q);
-	arb->bypass_qdisc.pspat_owned = 0;
-	arb->bypass_qdisc.state = 0;
-	arb->bypass_qdisc.__state = 0;
+	arbp->bypass_qdisc.enqueue = pspat_bypass_enqueue;
+	arbp->bypass_qdisc.dequeue = pspat_bypass_dequeue;
+	skb_queue_head_init(&arbp->bypass_qdisc.q);
+	arbp->bypass_qdisc.pspat_owned = 0;
+	arbp->bypass_qdisc.state = 0;
+	arbp->bypass_qdisc.__state = 0;
 
-	init_waitqueue_head(&arb->wqh);
+	init_waitqueue_head(&arbp->wqh);
 
-	INIT_LIST_HEAD(&arb->active_txqs);
+	INIT_LIST_HEAD(&arbp->active_txqs);
 
-	arb->task = kthread_create(arb_worker_func, arb, "pspat-arb");
-	if (IS_ERR(arb->task)) {
-		ret = -PTR_ERR(arb->task);
+	arbp->task = kthread_create(arb_worker_func, arbp, "pspat-arb");
+	if (IS_ERR(arbp->task)) {
+		ret = -PTR_ERR(arbp->task);
 		goto fail;
 	}
 
-	wake_up_process(arb->task);
+	wake_up_process(arbp->task);
 
 	printk("PSPAT arbiter created with %d per-core queues\n",
-	       arb->n_queues);
+	       arbp->n_queues);
 
 	mutex_unlock(&pspat_glock);
 
 	return 0;
 fail:
-	free_pages((unsigned long)arb, order_base_2(pspat_pages));
+	free_pages((unsigned long)arbp, order_base_2(pspat_pages));
 	mutex_unlock(&pspat_glock);
 
 	return ret;
