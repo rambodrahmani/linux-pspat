@@ -33,7 +33,7 @@ u32 pspat_qdisc_batch_limit = 40;
 u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_tc_deq = 0;
 u64 pspat_xmit_ok = 0;
-u64 pspat_mailbox_size = 512;
+u64 pspat_mailbox_entries = 512;
 u64 pspat_mailbox_line_size = 128;
 u64 *pspat_rounds;
 static int pspat_zero = 0;
@@ -165,10 +165,10 @@ static struct ctl_table pspat_static_ctl[] = {
 		.extra2		= &pspat_ulongmax,
 	},
 	{
-		.procname	= "mailbox_size",
+		.procname	= "mailbox_entries",
 		.maxlen		= sizeof(u64),
 		.mode		= 0644,
-		.data		= &pspat_mailbox_size,
+		.data		= &pspat_mailbox_entries,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
 		.extra2		= &pspat_ulongmax,
@@ -365,7 +365,7 @@ pspat_create_client_queue(void)
 	if (current->pspat_mb)
 		return 0;
 
-	m = pspat_mb_new(pspat_mailbox_size, pspat_mailbox_line_size);
+	m = pspat_mb_new(pspat_mailbox_entries, pspat_mailbox_line_size);
 	if (m == NULL)
 		return -ENOMEM;
 	current->pspat_mb = m;
@@ -394,7 +394,7 @@ pspat_create(void)
 	int ret;
 
 	/* get the current value of the mailbox parameters */
-	mb_entries = pspat_mailbox_size;
+	mb_entries = pspat_mailbox_entries;
 	mb_line_size = pspat_mailbox_line_size;
 	mb_size = pspat_mb_size(mb_entries);
 
