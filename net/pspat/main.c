@@ -45,6 +45,24 @@ static unsigned long pspat_ulongmax = (unsigned long)-1;
 static struct ctl_table_header *pspat_sysctl_hdr;
 static unsigned long pspat_pages;
 
+
+static int
+pspat_enable_proc_handler(struct ctl_table *table, int write,
+			  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+
+	if (ret || !write) {
+		return ret;
+	}
+
+	if (pspat_enable && arbp) {
+		wake_up_process(arbp->task);
+	}
+
+	return 0;
+}
+
 static struct ctl_table pspat_static_ctl[] = {
 	{
 		.procname	= "cpu",
@@ -65,7 +83,7 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.data		= &pspat_enable,
-		.proc_handler	= &proc_dointvec_minmax,
+		.proc_handler	= &pspat_enable_proc_handler,
 		.extra1		= &pspat_zero,
 		.extra2		= &pspat_one,
 	},
@@ -310,7 +328,8 @@ arb_worker_func(void *data)
 				printk("PSPAT arbiter unregistered\n");
 			}
 
-			msleep_interruptible(2000);
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule();
 
 		} else {
 			if (!arb_registered) {
