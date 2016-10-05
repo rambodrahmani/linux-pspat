@@ -22,9 +22,6 @@ struct pspat_queue {
 struct pspat {
 	struct task_struct	*task;
 
-	/* to notify arbiter, currently unused. */
-	wait_queue_head_t	wqh;
-
 	/* list of all the qdiscs that we stole from the system */
 	struct Qdisc	       *qdiscs;
 

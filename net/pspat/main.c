@@ -434,8 +434,6 @@ pspat_create(void)
 	arbp->bypass_qdisc.state = 0;
 	arbp->bypass_qdisc.__state = 0;
 
-	init_waitqueue_head(&arbp->wqh);
-
 	INIT_LIST_HEAD(&arbp->active_txqs);
 
 	arbp->task = kthread_create(arb_worker_func, arbp, "pspat-arb");
