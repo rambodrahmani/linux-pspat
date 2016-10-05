@@ -205,7 +205,8 @@ pspat_do_arbiter(struct pspat *arb)
 		pq->arb_extract_next = now + (pspat_arb_interval_ns << 10);
 
 		/* 
-		 * copy the new skbs from pq to our local cache.
+		 * copy the new skbs from pq to our local cache
+		 * (the cache does not exist anymore)
 		 */
 		notempty += !!pspat_arb_fetch(pq);
 

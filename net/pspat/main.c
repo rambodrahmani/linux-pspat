@@ -28,7 +28,6 @@ int pspat_single_txq = 1; /* use only one hw queue */
 int pspat_tc_bypass = 0;
 u64 pspat_rate = 40000000000; // 40Gb/s
 s64 pspat_arb_interval_ns = 1000;
-u32 pspat_arb_batch_limit = 40;
 u32 pspat_qdisc_batch_limit = 40;
 u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_tc_deq = 0;
@@ -131,13 +130,6 @@ static struct ctl_table pspat_static_ctl[] = {
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
 		.extra2		= &pspat_ulongmax,
-	},
-	{
-		.procname	= "arb_batch_limit",
-		.maxlen		= sizeof(u32),
-		.mode		= 0644,
-		.data		= &pspat_arb_batch_limit,
-		.proc_handler	= &proc_dointvec,
 	},
 	{
 		.procname	= "qdisc_batch_limit",

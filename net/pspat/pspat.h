@@ -5,7 +5,8 @@
 
 /* per-cpu data structure */
 struct pspat_queue {
-	/* Input queue, written by clients, read by the arbiter. */
+	/* Input queue, a mailbox of mailbox pointers.
+	 * written by clients, read by the arbiter. */
 	struct pspat_mailbox   *inq;
 
 	/* client fields */
