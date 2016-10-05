@@ -46,6 +46,8 @@ pspat_mb_init(struct pspat_mailbox *m, unsigned long entries,
 	m->prod_write = m->line_entries;
 	m->prod_check = 2 * m->line_entries;
 
+	INIT_LIST_HEAD(&m->list);
+
 	return 0;
 }
 
