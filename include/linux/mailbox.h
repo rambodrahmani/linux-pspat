@@ -10,7 +10,7 @@ struct pspat_mailbox {
 	/* shared (constant) fields */
 	unsigned long		size_mask;
 	unsigned long		size_shift;
-	unsigned long		line_size;
+	unsigned long		line_entries;
 	unsigned long		line_mask;
 
 	/* producer fields */
@@ -78,8 +78,8 @@ static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
 	if (unlikely(m->prod_write == m->prod_check)) {
 		if (*h)
 			return -ENOBUFS;
-		m->prod_check += m->line_size;
-		prefetch(h + m->line_size);
+		m->prod_check += m->line_entries;
+		prefetch(h + m->line_entries);
 	}
 	*h = (uintptr_t)v | ((m->prod_write >> m->size_shift) & 0x1);
 	m->prod_write++;
@@ -133,7 +133,7 @@ static inline void pspat_mb_clear(struct pspat_mailbox *m)
 {
 	unsigned long s = m->cons_read & ~m->line_mask;
 
-	for ( ; (m->cons_clear & ~m->line_mask) != s; m->cons_clear += m->line_size) {
+	for ( ; (m->cons_clear & ~m->line_mask) != s; m->cons_clear += m->line_entries) {
 		m->q[m->cons_clear & m->size_mask] = 0;
 	}
 }
