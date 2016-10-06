@@ -331,10 +331,10 @@ pspat_do_arbiter(struct pspat *arb)
 			BUG_ON(!skb->sender_cpu);
 			pq = pspat_arb->queues + skb->sender_cpu - 1;
 			switch (pspat_xmit_mode) {
-			case 0:
+			case PSPAT_XMIT_MODE_ARB:
 				skb = validate_xmit_skb_list(skb, skb->dev);
 				/* fallthrough */
-			case 1:
+			case PSPAT_XMIT_MODE_DISPATCH:
 				/* validation is done in the sender threads */
 				pspat_mark(arb, skb);
 				break;
@@ -345,10 +345,10 @@ pspat_do_arbiter(struct pspat *arb)
 		}
 	}
 
-	if (pspat_xmit_mode < 2) {
+	if (pspat_xmit_mode < PSPAT_XMIT_MODE_MAX) {
 		list_for_each_entry_safe(txq_cursor, txq_next,
 				&arb->active_txqs, pspat_active) {
-			if (pspat_xmit_mode == 0)
+			if (pspat_xmit_mode == PSPAT_XMIT_MODE_ARB)
 				pspat_arb_send(txq_cursor);
 			else
 				pspat_arb_publish(txq_cursor);

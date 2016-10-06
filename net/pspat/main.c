@@ -23,7 +23,7 @@ static struct pspat *arbp; /* For internal usage */
 
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
-int pspat_xmit_mode = 0; /* packets sent by the arbiter */
+int pspat_xmit_mode = PSPAT_XMIT_MODE_ARB;
 int pspat_single_txq = 1; /* use only one hw queue */
 int pspat_tc_bypass = 0;
 u64 pspat_rate = 40000000000; // 40Gb/s

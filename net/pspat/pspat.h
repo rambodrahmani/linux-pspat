@@ -46,6 +46,9 @@ int pspat_create_client_queue(void);
 
 extern int pspat_enable;
 extern int pspat_debug_xmit;
+#define PSPAT_XMIT_MODE_ARB		0 /* packets sent by the arbiter */
+#define PSPAT_XMIT_MODE_DISPATCH	1 /* packets sent by dispatcher */
+#define PSPAT_XMIT_MODE_MAX		2 /* packets dropped by the arbiter */
 extern int pspat_xmit_mode;
 extern int pspat_tc_bypass;
 extern int pspat_single_txq;
