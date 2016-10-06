@@ -34,12 +34,12 @@ pspat_mb_init(struct pspat_mailbox *m, unsigned long entries,
 	entries_per_line = line_size / sizeof(uintptr_t);
 
 	m->line_entries = entries_per_line;
-	m->line_mask = entries_per_line - 1;
-	m->size_mask = entries - 1;
-	m->size_shift = ilog2(entries);
+	m->line_mask = ~(entries_per_line - 1);
+	m->entry_mask = entries - 1;
+	m->seqbit_shift = ilog2(entries);
 
-	printk("line_entries %lu line_mask %lx size_mask %lx size_shift %lu\n",
-		m->line_entries, m->line_mask, m->size_mask, m->size_shift);
+	printk("line_entries %lu line_mask %lx entry_mask %lx seqbit_shift %lu\n",
+		m->line_entries, m->line_mask, m->entry_mask, m->seqbit_shift);
 	
 	m->cons_clear = 0;
 	m->cons_read = m->line_entries;

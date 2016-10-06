@@ -8,8 +8,8 @@
 
 struct pspat_mailbox {
 	/* shared (constant) fields */
-	unsigned long		size_mask;
-	unsigned long		size_shift;
+	unsigned long		entry_mask;
+	unsigned long		seqbit_shift;
 	unsigned long		line_entries;
 	unsigned long		line_mask;
 
@@ -73,7 +73,7 @@ void pspat_mb_delete(struct pspat_mailbox *m);
  */
 static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
 {
-	uintptr_t *h = &m->q[m->prod_write & m->size_mask];
+	uintptr_t *h = &m->q[m->prod_write & m->entry_mask];
 
 	if (unlikely(m->prod_write == m->prod_check)) {
 		if (*h)
@@ -81,14 +81,14 @@ static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
 		m->prod_check += m->line_entries;
 		prefetch(h + m->line_entries);
 	}
-	*h = (uintptr_t)v | ((m->prod_write >> m->size_shift) & 0x1);
+	*h = (uintptr_t)v | ((m->prod_write >> m->seqbit_shift) & 0x1);
 	m->prod_write++;
 	return 0;
 }
 
 static inline int __pspat_mb_empty(struct pspat_mailbox *m, uintptr_t v)
 {
-	return (!v) || ((v ^ (m->cons_read >> m->size_shift)) & 0x1);
+	return (!v) || ((v ^ (m->cons_read >> m->seqbit_shift)) & 0x1);
 }
 
 /**
@@ -99,7 +99,7 @@ static inline int __pspat_mb_empty(struct pspat_mailbox *m, uintptr_t v)
  */
 static inline int pspat_mb_empty(struct pspat_mailbox *m)
 {
-	uintptr_t v = m->q[m->cons_read & m->size_mask];
+	uintptr_t v = m->q[m->cons_read & m->entry_mask];
 
 	return __pspat_mb_empty(m, v);
 }
@@ -114,7 +114,7 @@ static inline int pspat_mb_empty(struct pspat_mailbox *m)
  */
 static inline void *pspat_mb_extract(struct pspat_mailbox *m)
 {
-	uintptr_t v = m->q[m->cons_read & m->size_mask];
+	uintptr_t v = m->q[m->cons_read & m->entry_mask];
 
 	if (__pspat_mb_empty(m, v))
 		return NULL;
@@ -131,10 +131,10 @@ static inline void *pspat_mb_extract(struct pspat_mailbox *m)
  */
 static inline void pspat_mb_clear(struct pspat_mailbox *m)
 {
-	unsigned long s = m->cons_read & ~m->line_mask;
+	unsigned long s = m->cons_read & m->line_mask;
 
-	for ( ; (m->cons_clear & ~m->line_mask) != s; m->cons_clear += m->line_entries) {
-		m->q[m->cons_clear & m->size_mask] = 0;
+	for ( ; (m->cons_clear & m->line_mask) != s; m->cons_clear += m->line_entries) {
+		m->q[m->cons_clear & m->entry_mask] = 0;
 	}
 }
 
