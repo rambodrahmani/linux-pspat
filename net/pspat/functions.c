@@ -448,6 +448,8 @@ retry:
 			/* we failed to push PSPAT_LAST_SKB but the
 			 * arbiter was running. We must try again
 			 */
+			printk("PSPAT Try again to destroy mailbox\n");
+			set_current_state(TASK_INTERRUPTIBLE);
 			schedule_timeout(100);
 			goto retry;
 		} else {
