@@ -5,6 +5,9 @@
 
 #include "pspat.h"
 
+/* clients send this value on a mailbox when exiting */
+#define PSPAT_LAST_SKB	(void *)0x2
+
 /* push a new packet to the client queue
  * returns -ENOBUFS if the queue is full
  */
@@ -72,17 +75,21 @@ pspat_arb_get_skb(struct pspat_queue *pq)
 	struct sk_buff *skb;
 
 retry:
+	/* first, get the current mailbox fro this cpu */
 	m = pspat_arb_get_mb(pq);
 	if (m == NULL)
 		return NULL;
+	/* try to extract an skb from the current mailbox */
 	skb = pspat_mb_extract(m);
 	if (skb) {
-		if (unlikely(skb == (void *)0x2)) {
+		if (unlikely(skb == PSPAT_LAST_SKB)) {
+			/* special value: the client is gone */
 			pspat_mb_delete(m);
 			pq->arb_last_mb = NULL;
 			goto retry;
 		}
 
+		/* let pspat_arb_ack() see this mailbox */
 		if (list_empty(&m->list)) {
 			list_add_tail(&m->list, &pq->mb_to_clear);
 		}
@@ -360,6 +367,9 @@ pspat_shutdown(struct pspat *arb)
 	struct Qdisc *q, **_q;
 	int i;
 
+	/* We need to drain all the queues to discover and free up
+	 * all dead mailboxes
+	 */
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
 		struct sk_buff *skb;
@@ -424,23 +434,33 @@ retry:
 	rcu_read_lock();
 	arb = rcu_dereference(pspat_arb);
 	if (arb) {
-		/* let the arbiter free the queue */
+		/* if the arbiter is running, we cannot delete the mailbox
+		 * by ourselves. Instead, we send the PSPAT_LAST_SKB to
+		 * notifiy the arbiter of our departure
+		 */
 		cpu = get_cpu();
 		pq = arb->queues + cpu;
-		if (pspat_cli_push(pq, (void *)0x2) == 0) {
-			printk("client %p: delegated destruction of %p to arbiter\n", current, current->pspat_mb);
+		if (pspat_cli_push(pq, PSPAT_LAST_SKB) == 0) {
 			current->pspat_mb = NULL;
 		}
 		put_cpu();
 	}
 	rcu_read_unlock();
 	if (current->pspat_mb) {
+		/* the mailbox is still there */
 		if (arb) {
+			/* we failed to push PSPAT_LAST_SKB but the
+			 * arbiter was running. We must try again
+			 */
 			schedule_timeout(100);
 			goto retry;
 		} else {
+			/* the arbiter is not running. Since
+			 * pspat_shutdown() drains everything, any
+			 * new arbiter will not see this mailbox.
+			 * Therefore, we can safely free it up.
+			 */
 			pspat_mb_delete(current->pspat_mb);
-			printk("client %p: deleted %p\n", current, current->pspat_mb);
 			current->pspat_mb = NULL;
 		}
 	}
