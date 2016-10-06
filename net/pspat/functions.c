@@ -5,8 +5,6 @@
 
 #include "pspat.h"
 
-#define pspat_next(a)	do { (a)++; if (unlikely((a) >= PSPAT_QLEN)) (a) = 0; } while (0)
-
 /* push a new packet to the client queue
  * returns -ENOBUFS if the queue is full
  */
