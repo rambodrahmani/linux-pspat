@@ -157,6 +157,11 @@ pspat_arb_ack(struct pspat_queue *pq)
 }
 
 static void
+pspat_arb_drop(struct pspat_queue *pq)
+{
+}
+
+static void
 pspat_arb_send(struct netdev_queue *txq)
 {
 	struct net_device *dev = txq->dev;
@@ -279,11 +284,7 @@ pspat_do_arbiter(struct pspat *arb)
 			}
 			if (unlikely(rc)) {
 				pspat_arb_tc_enq_drop ++;
-				/* enqueue frees the skb by itself
-				 * in case of error, so we have nothing
-				 * to do here
-				 */
-				continue;
+				pspat_arb_drop(pq);
 			}
 		}
 	}
