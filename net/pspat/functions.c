@@ -394,13 +394,9 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 {
 	int cpu, rc = NET_XMIT_SUCCESS;
 	struct pspat_queue *pq;
-	struct pspat *arb = rcu_dereference(pspat_arb);
+	struct pspat *arb;
 
-	if (unlikely(pspat_debug_xmit)) {
-		printk("handler(%p,%p)\n", arb, skb);
-	}
-
-	if (!(pspat_enable && arb)) {
+	if (!pspat_enable || (arb = rcu_dereference(pspat_arb)) == NULL) {
 		/* Not our business. */
 		return -ENOTTY;
 	}
