@@ -235,9 +235,6 @@ pspat_do_arbiter(struct pspat *arb)
 				 */
 				spin_lock(qdisc_lock(q));
 				can_steal = qdisc_run_begin(q);
-				if (can_steal) {
-					set_bit(__QDISC_STATE_DEACTIVATED, &q->state);
-				}
 				spin_unlock(qdisc_lock(q));
 
 				if (!can_steal) {
@@ -374,7 +371,6 @@ pspat_shutdown(struct pspat *arb)
 	for (_q = &arb->qdiscs, q = *_q; q; _q = &q->pspat_next, q = *_q) {
 		spin_lock(qdisc_lock(q));
 		qdisc_run_end(q);
-		clear_bit(__QDISC_STATE_DEACTIVATED, &q->state);
 		spin_unlock(qdisc_lock(q));
 		q->pspat_owned = 0;
 		*_q = NULL;
