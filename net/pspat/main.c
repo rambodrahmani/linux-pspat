@@ -30,6 +30,7 @@ u64 pspat_rate = 40000000000; // 40Gb/s
 s64 pspat_arb_interval_ns = 1000;
 u32 pspat_qdisc_batch_limit = 40;
 u64 pspat_arb_tc_enq_drop = 0;
+u64 pspat_arb_backpressure_drop = 0;
 u64 pspat_arb_tc_deq = 0;
 u64 pspat_xmit_ok = 0;
 u64 pspat_mailbox_entries = 512;
@@ -167,6 +168,15 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
 		.data		= &pspat_arb_tc_enq_drop,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "arb_backpressure_drop",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_arb_backpressure_drop,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
 		.extra2		= &pspat_ulongmax,

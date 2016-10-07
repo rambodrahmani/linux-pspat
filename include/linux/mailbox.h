@@ -13,6 +13,9 @@ struct pspat_mailbox {
 	unsigned long		line_entries;
 	unsigned long		line_mask;
 
+	/* shared field, written by both */
+	unsigned long		backpressure;
+
 	/* producer fields */
 	START_NEW_CACHELINE
 	unsigned long		prod_write;

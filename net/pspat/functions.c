@@ -34,6 +34,13 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 			return err;
 		pq->cli_last_mb = m;
 	}
+
+	if (unlikely(m->backpressure)) {
+		m->backpressure = 0;
+		printk("mailbox %p backpressure\n", m);
+		return -ENOBUFS;
+	}
+
 	return 0;
 }
 
@@ -164,8 +171,27 @@ pspat_arb_ack(struct pspat_queue *pq)
 }
 
 static void
-pspat_arb_drop(struct pspat_queue *pq)
+pspat_arb_drain(struct pspat_queue *pq)
 {
+	struct pspat_mailbox *m = pq->arb_last_mb;
+	struct sk_buff *skb;
+	int dropped = 0;
+
+	BUG_ON(!m);
+	while (!pspat_mb_empty(m)) {
+		skb = pspat_arb_get_skb(pq);
+		BUG_ON(!skb);
+		kfree_skb(skb);
+		dropped++;
+	}
+
+	if (!m->backpressure) {
+		m->backpressure = 1;
+	}
+	pq->arb_last_mb = NULL; /* save a call to pspat_mb_empty(m) */
+
+	printk("PSPAT drained mailbox %p [%d skbs]\n", m, dropped);
+	pspat_arb_backpressure_drop += dropped;
 }
 
 static void
@@ -291,7 +317,7 @@ pspat_do_arbiter(struct pspat *arb)
 			}
 			if (unlikely(rc)) {
 				pspat_arb_tc_enq_drop ++;
-				pspat_arb_drop(pq);
+				pspat_arb_drain(pq);
 			}
 		}
 	}
