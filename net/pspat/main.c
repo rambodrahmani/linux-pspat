@@ -51,13 +51,28 @@ pspat_enable_proc_handler(struct ctl_table *table, int write,
 {
 	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 
-	if (ret || !write) {
+	if (ret || !write || !pspat_enable || !arbp) {
 		return ret;
 	}
 
-	if (pspat_enable && arbp) {
-		wake_up_process(arbp->task);
+	wake_up_process(arbp->arb_task);
+	wake_up_process(arbp->snd_task);
+
+	return 0;
+}
+
+static int
+pspat_xmit_mode_proc_handler(struct ctl_table *table, int write,
+			     void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+
+	if (ret || !write || !pspat_enable || !arbp
+			|| pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH) {
+		return ret;
 	}
+
+	wake_up_process(arbp->snd_task);
 
 	return 0;
 }
@@ -100,7 +115,7 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.data		= &pspat_xmit_mode,
-		.proc_handler	= &proc_dointvec_minmax,
+		.proc_handler	= &pspat_xmit_mode_proc_handler,
 		.extra1		= &pspat_zero,
 		.extra2		= &pspat_two,
 	},
@@ -333,15 +348,38 @@ arb_worker_func(void *data)
 				arb_registered = true;
 				printk("PSPAT arbiter registered\n");
 			}
-			set_current_state(TASK_INTERRUPTIBLE);
 			pspat_do_arbiter(arb);
 			if (need_resched()) {
+				set_current_state(TASK_INTERRUPTIBLE);
 				schedule_timeout(1);
 			}
 		}
 	}
 
-	set_current_state(TASK_RUNNING);
+	return 0;
+}
+
+static int
+snd_worker_func(void *data)
+{
+	struct pspat *arb = (struct pspat *)data;
+
+	while (!kthread_should_stop()) {
+		if (pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH
+						|| !pspat_enable) {
+			printk("PSPAT dispatcher goes to sleep\n");
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule();
+			printk("PSPAT dispatcher wakes up\n");
+
+		} else {
+			pspat_do_sender(arb);
+			if (need_resched()) {
+				set_current_state(TASK_INTERRUPTIBLE);
+				schedule_timeout(1);
+			}
+		}
+	}
 
 	return 0;
 }
@@ -356,7 +394,14 @@ pspat_destroy(void)
 	rcu_assign_pointer(pspat_arb, NULL);
 	synchronize_rcu();
 
-	kthread_stop(arbp->task);
+	if (arbp->arb_task) {
+		kthread_stop(arbp->arb_task);
+		arbp->arb_task = NULL;
+	}
+	if (arbp->snd_task) {
+		kthread_stop(arbp->snd_task);
+		arbp->snd_task = NULL;
+	}
 
 	pspat_shutdown(arbp);
 	free_pages((unsigned long)arbp, order_base_2(pspat_pages));
@@ -447,20 +492,30 @@ pspat_create(void)
 
 	INIT_LIST_HEAD(&arbp->active_txqs);
 
-	arbp->task = kthread_create(arb_worker_func, arbp, "pspat-arb");
-	if (IS_ERR(arbp->task)) {
-		ret = -PTR_ERR(arbp->task);
+	arbp->arb_task = kthread_create(arb_worker_func, arbp, "pspat-arb");
+	if (IS_ERR(arbp->arb_task)) {
+		ret = -PTR_ERR(arbp->arb_task);
 		goto fail;
 	}
 
-	wake_up_process(arbp->task);
+	arbp->snd_task = kthread_create(snd_worker_func, arbp, "pspat-snd");
+	if (IS_ERR(arbp->snd_task)) {
+		ret = -PTR_ERR(arbp->snd_task);
+		goto fail2;
+	}
 
 	printk("PSPAT arbiter created with %d per-core queues\n",
 	       arbp->n_queues);
 
 	mutex_unlock(&pspat_glock);
 
+	wake_up_process(arbp->arb_task);
+	wake_up_process(arbp->snd_task);
+
 	return 0;
+fail2:
+	kthread_stop(arbp->arb_task);
+	arbp->arb_task = NULL;
 fail:
 	free_pages((unsigned long)arbp, order_base_2(pspat_pages));
 	mutex_unlock(&pspat_glock);

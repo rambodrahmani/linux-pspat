@@ -21,7 +21,8 @@ struct pspat_queue {
 };
 
 struct pspat {
-	struct task_struct	*task;
+	struct task_struct	*arb_task;
+	struct task_struct	*snd_task;
 
 	/* list of all the qdiscs that we stole from the system */
 	struct Qdisc	       *qdiscs;
