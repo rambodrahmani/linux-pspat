@@ -23,6 +23,13 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 			return err;
 	}
 	m = current->pspat_mb;
+
+	if (unlikely(m->backpressure)) {
+		m->backpressure = 0;
+		printk("mailbox %p backpressure\n", m);
+		return -ENOBUFS;
+	}
+
 	err = pspat_mb_insert(m, skb);
 	if (err)
 		return err;
@@ -33,12 +40,6 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 		if (err)
 			return err;
 		pq->cli_last_mb = m;
-	}
-
-	if (unlikely(m->backpressure)) {
-		m->backpressure = 0;
-		printk("mailbox %p backpressure\n", m);
-		return -ENOBUFS;
 	}
 
 	return 0;
