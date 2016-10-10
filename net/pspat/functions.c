@@ -24,6 +24,8 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 	}
 	m = current->pspat_mb;
 
+        /* The backpressure flag set tells us that the qdisc is being overrun.
+         * We return an error to propagate the overrun to the client. */
 	if (unlikely(m->backpressure)) {
 		m->backpressure = 0;
 		printk("mailbox %p backpressure\n", m);
@@ -317,6 +319,12 @@ pspat_do_arbiter(struct pspat *arb)
 				printk("enq(%p,%p)-->%d\n", q, skb, rc);
 			}
 			if (unlikely(rc)) {
+                                /* q->enqueue is starting to drop packets, e.g.
+                                 * one internal queue in the qdisc is full. We
+                                 * would like to propagate this signal to the
+                                 * client, so we set the backpressure flag. We
+                                 * also drain the mailbox because it may not be
+                                 * anymore in the clients list. */
 				pspat_arb_tc_enq_drop ++;
 				pspat_arb_drain(pq);
 			}
