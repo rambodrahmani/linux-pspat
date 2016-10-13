@@ -232,7 +232,7 @@ pspat_do_arbiter(struct pspat *arb)
 	rcu_read_lock_bh();
 
 	/*
-	 * bring in pending packets, arrived between next_link_idle
+	 * bring in pending packets, arrived between pspat_next_link_idle
 	 * and now (we assume they arrived at last_check)
 	 */
 	notempty = 0;
@@ -378,6 +378,14 @@ pspat_do_arbiter(struct pspat *arb)
 				break;
 			}
 		}
+
+                /* If the traffic on this root qdisc is not enough to fill
+                 * the link bandwidth, we need to move pspat_next_link_idle
+                 * forward, in order to avoid accumulating credits. */
+                if (q->pspat_next_link_idle <= now &&
+                            ndeq < q->pspat_batch_limit) {
+                    q->pspat_next_link_idle = now;
+                }
 	}
 
 	if (pspat_xmit_mode < PSPAT_XMIT_MODE_MAX) {
