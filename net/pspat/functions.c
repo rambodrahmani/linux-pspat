@@ -131,7 +131,7 @@ pspat_mark(struct pspat *arb, struct sk_buff *skb)
 }
 
 static uint64_t
-pspat_pkt_pico(uint64_t rate, unsigned int len)
+pspat_pkt_pico(unsigned int len)
 {
 	return ((8 * (NSEC_PER_SEC << 10)) * len) / pspat_rate;
 }
@@ -361,7 +361,7 @@ pspat_do_arbiter(struct pspat *arb)
 				printk("deq(%p)-->%p\n", q, skb);
 			}
 			q->pspat_next_link_idle +=
-				pspat_pkt_pico(pspat_rate, skb->len);
+				pspat_pkt_pico(skb->len);
 			ndeq++;
 			BUG_ON(!skb->sender_cpu);
 			pq = pspat_arb->queues + skb->sender_cpu - 1;
