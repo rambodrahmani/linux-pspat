@@ -1,6 +1,6 @@
 #include <linux/gfp.h>
 #include <linux/slab.h>
-#include <linux/mailbox.h>
+#include "mailbox.h"
 
 struct pspat_mailbox*
 pspat_mb_new(unsigned long entries, unsigned long line_size)
