@@ -1,7 +1,7 @@
 #ifndef __PSPAT_H__
 #define __PSPAT_H__
 
-#include <linux/mailbox.h>
+#include "mailbox.h"
 
 /* per-cpu data structure */
 struct pspat_queue {
