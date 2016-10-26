@@ -1,8 +1,6 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/aio.h>
-#include <linux/miscdevice.h>
-#include <linux/poll.h>
 #include <linux/moduleparam.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
@@ -14,25 +12,29 @@
 #include <linux/netdevice.h>
 #include <net/sch_generic.h>
 #include <linux/rcupdate.h>
+#include <linux/kthread.h>
 
 #include "pspat.h"
 
 
 DEFINE_MUTEX(pspat_glock);
-struct pspat *pspat_arb;
+struct pspat *pspat_arb;  /* RCU-dereferenced */
+static struct pspat *arbp; /* For internal usage */
 
 int pspat_enable = 0;
 int pspat_debug_xmit = 0;
-int pspat_xmit_mode = 0; /* packets sent by the arbiter */
+int pspat_xmit_mode = PSPAT_XMIT_MODE_ARB;
 int pspat_single_txq = 1; /* use only one hw queue */
 int pspat_tc_bypass = 0;
 u64 pspat_rate = 40000000000; // 40Gb/s
 s64 pspat_arb_interval_ns = 1000;
-u32 pspat_arb_batch_limit = 40;
 u32 pspat_qdisc_batch_limit = 40;
 u64 pspat_arb_tc_enq_drop = 0;
+u64 pspat_arb_backpressure_drop = 0;
 u64 pspat_arb_tc_deq = 0;
 u64 pspat_xmit_ok = 0;
+u64 pspat_mailbox_entries = 512;
+u64 pspat_mailbox_line_size = 128;
 u64 *pspat_rounds;
 static int pspat_zero = 0;
 static int pspat_one = 1;
@@ -41,6 +43,40 @@ static unsigned long pspat_ulongzero = 0UL;
 static unsigned long pspat_ulongone = 1UL;
 static unsigned long pspat_ulongmax = (unsigned long)-1;
 static struct ctl_table_header *pspat_sysctl_hdr;
+static unsigned long pspat_pages;
+
+
+static int
+pspat_enable_proc_handler(struct ctl_table *table, int write,
+			  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+
+	if (ret || !write || !pspat_enable || !arbp) {
+		return ret;
+	}
+
+	wake_up_process(arbp->arb_task);
+	wake_up_process(arbp->snd_task);
+
+	return 0;
+}
+
+static int
+pspat_xmit_mode_proc_handler(struct ctl_table *table, int write,
+			     void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+
+	if (ret || !write || !pspat_enable || !arbp
+			|| pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH) {
+		return ret;
+	}
+
+	wake_up_process(arbp->snd_task);
+
+	return 0;
+}
 
 static struct ctl_table pspat_static_ctl[] = {
 	{
@@ -62,7 +98,7 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.data		= &pspat_enable,
-		.proc_handler	= &proc_dointvec_minmax,
+		.proc_handler	= &pspat_enable_proc_handler,
 		.extra1		= &pspat_zero,
 		.extra2		= &pspat_one,
 	},
@@ -80,7 +116,7 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.data		= &pspat_xmit_mode,
-		.proc_handler	= &proc_dointvec_minmax,
+		.proc_handler	= &pspat_xmit_mode_proc_handler,
 		.extra1		= &pspat_zero,
 		.extra2		= &pspat_two,
 	},
@@ -112,13 +148,6 @@ static struct ctl_table pspat_static_ctl[] = {
 		.extra2		= &pspat_ulongmax,
 	},
 	{
-		.procname	= "arb_batch_limit",
-		.maxlen		= sizeof(u32),
-		.mode		= 0644,
-		.data		= &pspat_arb_batch_limit,
-		.proc_handler	= &proc_dointvec,
-	},
-	{
 		.procname	= "qdisc_batch_limit",
 		.maxlen		= sizeof(u32),
 		.mode		= 0644,
@@ -144,6 +173,15 @@ static struct ctl_table pspat_static_ctl[] = {
 		.extra2		= &pspat_ulongmax,
 	},
 	{
+		.procname	= "arb_backpressure_drop",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_arb_backpressure_drop,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
 		.procname	= "arb_tc_deq",
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
@@ -157,6 +195,24 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
 		.data		= &pspat_xmit_ok,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "mailbox_entries",
+		.maxlen		= sizeof(u64),
+		.mode		= 0644,
+		.data		= &pspat_mailbox_entries,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "mailbox_line_size",
+		.maxlen		= sizeof(u64),
+		.mode		= 0644,
+		.data		= &pspat_mailbox_line_size,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
 		.extra2		= &pspat_ulongmax,
@@ -272,42 +328,113 @@ extern int (*pspat_handler)(struct sk_buff *, struct Qdisc *,
 			    struct netdev_queue *);
 
 static int
-pspat_open(struct inode *inode, struct file *f)
+arb_worker_func(void *data)
 {
-	/* Do nothing, initialization is on-demand. */
-	f->private_data = NULL;
+	struct pspat *arb = (struct pspat *)data;
+	bool arb_registered = false;
+
+	while (!kthread_should_stop()) {
+		if (!pspat_enable) {
+			if (arb_registered) {
+				mutex_lock(&pspat_glock);
+				pspat_shutdown(arb);
+				rcu_assign_pointer(pspat_arb, NULL);
+				synchronize_rcu();
+				mutex_unlock(&pspat_glock);
+				arb_registered = false;
+				printk("PSPAT arbiter unregistered\n");
+			}
+
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule();
+
+		} else {
+			if (!arb_registered) {
+				/* Register the arbiter. */
+				mutex_lock(&pspat_glock);
+				rcu_assign_pointer(pspat_arb, arb);
+				synchronize_rcu();
+				mutex_unlock(&pspat_glock);
+				arb_registered = true;
+				printk("PSPAT arbiter registered\n");
+			}
+			pspat_do_arbiter(arb);
+			if (need_resched()) {
+				set_current_state(TASK_INTERRUPTIBLE);
+				schedule_timeout(1);
+			}
+		}
+	}
 
 	return 0;
 }
 
 static int
-pspat_release(struct inode *inode, struct file *f)
+snd_worker_func(void *data)
 {
-	if (!f->private_data) {
-		/* Nothing was created, nothing to destroy. */
-		return 0;
+	struct pspat *arb = (struct pspat *)data;
+
+	while (!kthread_should_stop()) {
+		if (pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH
+						|| !pspat_enable) {
+			printk("PSPAT dispatcher goes to sleep\n");
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule();
+			printk("PSPAT dispatcher wakes up\n");
+
+		} else {
+			pspat_do_sender(arb);
+			if (need_resched()) {
+				set_current_state(TASK_INTERRUPTIBLE);
+				schedule_timeout(1);
+			}
+		}
 	}
 
+	return 0;
+}
+
+static int
+pspat_destroy(void)
+{
 	mutex_lock(&pspat_glock);
-	if (f->private_data == pspat_arb) {
-		/* Destroy arbiter. */
-		struct pspat *arb = pspat_arb;
+	BUG_ON(arbp == NULL);
 
-		/* Unregister the arbiter. */
-		rcu_assign_pointer(pspat_arb, NULL);
-		synchronize_rcu();
+	/* Unregister the arbiter. */
+	rcu_assign_pointer(pspat_arb, NULL);
+	synchronize_rcu();
 
-		pspat_shutdown(arb);
-		kfree(arb);
-
-		f->private_data = NULL;
-		printk("PSPAT arbiter destroyed\n");
-
-	} else {
-		/* Destroy transmitter. */
+	if (arbp->arb_task) {
+		kthread_stop(arbp->arb_task);
+		arbp->arb_task = NULL;
 	}
+	if (arbp->snd_task) {
+		kthread_stop(arbp->snd_task);
+		arbp->snd_task = NULL;
+	}
+
+	pspat_shutdown(arbp);
+	free_pages((unsigned long)arbp, order_base_2(pspat_pages));
+	arbp = NULL;
+
+	printk("PSPAT arbiter destroyed\n");
 	mutex_unlock(&pspat_glock);
 
+	return 0;
+}
+
+int
+pspat_create_client_queue(void)
+{
+	struct pspat_mailbox *m;
+
+	if (current->pspat_mb)
+		return 0;
+
+	m = pspat_mb_new(pspat_mailbox_entries, pspat_mailbox_line_size);
+	if (m == NULL)
+		return -ENOMEM;
+	current->pspat_mb = m;
 	return 0;
 }
 
@@ -324,120 +451,87 @@ pspat_bypass_dequeue(struct Qdisc *q)
 }
 
 static int
-pspat_create(struct file *f, unsigned int cmd)
+pspat_create(void)
 {
-	int cpus = num_online_cpus();
-	struct pspat *arb;
+	int cpus = num_online_cpus(), i;
+	struct pspat_mailbox *m;
+	unsigned long mb_entries, mb_line_size;
+	size_t mb_size, arb_size;
+	int ret;
 
-	if (cmd < cpus) {
-		/* Create a transmitter thread. */
-		f->private_data = f;
-		return 0;
-	}
+	/* get the current value of the mailbox parameters */
+	mb_entries = pspat_mailbox_entries;
+	mb_line_size = pspat_mailbox_line_size;
+	mb_size = pspat_mb_size(mb_entries);
 
 	/* Create the arbiter on demand. */
 	mutex_lock(&pspat_glock);
-	if (pspat_arb) {
-		mutex_unlock(&pspat_glock);
-		printk("PSPAT arbiter already exists\n");
+	BUG_ON(arbp != NULL);
 
-		return -EBUSY;
-	}
+	arb_size = roundup(sizeof(*arbp) + cpus * sizeof(*arbp->queues),
+			INTERNODE_CACHE_BYTES);
+	pspat_pages = DIV_ROUND_UP(arb_size + mb_size * cpus, PAGE_SIZE);
 
-	arb = kzalloc(sizeof(*arb) +
-			    cpus * sizeof(*arb->queues),
-			    GFP_KERNEL);
-	if (!arb) {
+	arbp = (struct pspat *)__get_free_pages(GFP_KERNEL, order_base_2(pspat_pages));
+	if (!arbp) {
 		mutex_unlock(&pspat_glock);
 		return -ENOMEM;
 	}
-	f->private_data = arb;
-	arb->n_queues = cpus;
+	memset(arbp, 0, PAGE_SIZE * pspat_pages);
+	arbp->n_queues = cpus;
+
+	/* initialize all mailboxes */
+	m = (void *)arbp + arb_size;
+	for (i = 0; i < cpus; i++) {
+		ret = pspat_mb_init(m, mb_entries, mb_line_size);
+		if (ret ) {
+			goto fail;
+		}
+		arbp->queues[i].inq = m;
+		INIT_LIST_HEAD(&arbp->queues[i].mb_to_clear);
+		m = (void *)m + mb_size;
+	}
 
 	/* Initialize bypass qdisc. */
-	arb->bypass_qdisc.enqueue = pspat_bypass_enqueue;
-	arb->bypass_qdisc.dequeue = pspat_bypass_dequeue;
-	skb_queue_head_init(&arb->bypass_qdisc.q);
-	arb->bypass_qdisc.pspat_owned = 0;
-	arb->bypass_qdisc.state = 0;
-	arb->bypass_qdisc.__state = 0;
+	arbp->bypass_qdisc.enqueue = pspat_bypass_enqueue;
+	arbp->bypass_qdisc.dequeue = pspat_bypass_dequeue;
+	skb_queue_head_init(&arbp->bypass_qdisc.q);
+	arbp->bypass_qdisc.pspat_owned = 0;
+	arbp->bypass_qdisc.state = 0;
+	arbp->bypass_qdisc.__state = 0;
 
-	init_waitqueue_head(&arb->wqh);
+	INIT_LIST_HEAD(&arbp->active_txqs);
 
-	INIT_LIST_HEAD(&arb->active_txqs);
+	arbp->arb_task = kthread_create(arb_worker_func, arbp, "pspat-arb");
+	if (IS_ERR(arbp->arb_task)) {
+		ret = -PTR_ERR(arbp->arb_task);
+		goto fail;
+	}
 
-	/* Register the arbiter. */
-	rcu_assign_pointer(pspat_arb, arb);
-	synchronize_rcu();
+	arbp->snd_task = kthread_create(snd_worker_func, arbp, "pspat-snd");
+	if (IS_ERR(arbp->snd_task)) {
+		ret = -PTR_ERR(arbp->snd_task);
+		goto fail2;
+	}
+
 	printk("PSPAT arbiter created with %d per-core queues\n",
-	       arb->n_queues);
+	       arbp->n_queues);
 
 	mutex_unlock(&pspat_glock);
 
-	return 0;
-}
-
-static long
-pspat_ioctl(struct file *f, unsigned int cmd, unsigned long flags)
-{
-	DECLARE_WAITQUEUE(wait, current);
-	bool blocking = false;
-
-	if (f->private_data == NULL) {
-		/* We need to create something on demand. */
-		int ret = pspat_create(f, cmd);
-
-		if (ret) {
-			return ret;
-		}
-	}
-
-	if (blocking) {
-		add_wait_queue(&pspat_arb->wqh, &wait);
-	}
-
-	for (;;) {
-		/* Wait for a notification or a signal. */
-		if (need_resched()) {
-			current->state = TASK_INTERRUPTIBLE;
-			schedule_timeout(1);
-			current->state = TASK_RUNNING;
-		}
-
-		if (signal_pending(current)) {
-			printk("Got a signal, returning to userspace\n");
-			break;
-		}
-
-		if (f->private_data == pspat_arb) {
-			/* Invoke the arbiter. */
-			pspat_do_arbiter(pspat_arb);
-		} else {
-			/* Invoke the transmitter. */
-			pspat_do_sender(pspat_arb);
-		}
-	}
-
-	if (blocking) {
-		remove_wait_queue(&pspat_arb->wqh, &wait);
-	}
+	wake_up_process(arbp->arb_task);
+	wake_up_process(arbp->snd_task);
 
 	return 0;
+fail2:
+	kthread_stop(arbp->arb_task);
+	arbp->arb_task = NULL;
+fail:
+	free_pages((unsigned long)arbp, order_base_2(pspat_pages));
+	mutex_unlock(&pspat_glock);
+
+	return ret;
 }
-
-static const struct file_operations pspat_fops = {
-	.owner          = THIS_MODULE,
-	.release        = pspat_release,
-	.open           = pspat_open,
-	.unlocked_ioctl = pspat_ioctl,
-	.llseek         = noop_llseek,
-};
-
-static struct miscdevice pspat_misc = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "pspat",
-	.fops = &pspat_fops,
-};
 
 static int __init
 pspat_init(void)
@@ -450,23 +544,30 @@ pspat_init(void)
 		return ret;
 	}
 
-	ret = misc_register(&pspat_misc);
+	ret = pspat_create();
 	if (ret) {
-		printk("Failed to register rlite misc device\n");
-		return ret;
+		printk("Failed to create arbiter\n");
+		goto err1;
 	}
 
 	return 0;
+err1:
+	pspat_sysctl_fini();
+
+	return ret;
 }
 
 static void __exit
 pspat_fini(void)
 {
-	misc_deregister(&pspat_misc);
+	pspat_destroy();
 	pspat_sysctl_fini();
 }
 
 module_init(pspat_init);
 module_exit(pspat_fini);
-MODULE_LICENSE("GPL");
+
+MODULE_LICENSE("Dual BSD/GPL");
+MODULE_AUTHOR("Giuseppe Lettieri <g.lettieri@iet.unipi.it");
 MODULE_AUTHOR("Vincenzo Maffione <v.maffione@gmail.com>");
+MODULE_AUTHOR("Luigi Rizzo <rizzo@iet.unipi.it>");

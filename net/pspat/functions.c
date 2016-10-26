@@ -5,7 +5,8 @@
 
 #include "pspat.h"
 
-#define pspat_next(a)	do { (a)++; if (unlikely((a) >= PSPAT_QLEN)) (a) = 0; } while (0)
+/* clients send this value on a mailbox when exiting */
+#define PSPAT_LAST_SKB	(void *)0x2
 
 /* push a new packet to the client queue
  * returns -ENOBUFS if the queue is full
@@ -13,15 +14,54 @@
 static int
 pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 {
-	uint32_t tail = pq->cli_inq_tail;
+	struct pspat_mailbox *m;
+	int err;
 
-	if (pq->inq[tail])
+	if (unlikely(current->pspat_mb == NULL)) {
+		err = pspat_create_client_queue();
+		if (err)
+			return err;
+	}
+	m = current->pspat_mb;
+
+        /* The backpressure flag set tells us that the qdisc is being overrun.
+         * We return an error to propagate the overrun to the client. */
+	if (unlikely(m->backpressure)) {
+		m->backpressure = 0;
+		printk("mailbox %p backpressure\n", m);
 		return -ENOBUFS;
-	pq->inq[tail] = skb;
+	}
 
-	pspat_next(pq->cli_inq_tail);
+	err = pspat_mb_insert(m, skb);
+	if (err)
+		return err;
+	/* avoid duplicate notification */
+	if (pq->cli_last_mb != m) {
+		smp_mb(); /* let the arbiter see the insert above */
+		err = pspat_mb_insert(pq->inq, m);
+		if (err)
+			return err;
+		pq->cli_last_mb = m;
+	}
 
 	return 0;
+}
+
+static struct pspat_mailbox *
+pspat_arb_get_mb(struct pspat_queue *pq)
+{
+	struct pspat_mailbox *m = pq->arb_last_mb;
+
+	if (m == NULL || pspat_mb_empty(m)) {
+		m = pspat_mb_extract(pq->inq);
+		if (m) {
+			pspat_mb_clear(pq->inq);
+			pq->arb_last_mb = m;
+			/* wait for previous updates in the new mailbox */
+			smp_mb();
+		}
+	}
+	return m;
 }
 
 /* copy new skbs from client queue to local queue
@@ -31,56 +71,52 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 static int
 pspat_arb_fetch(struct pspat_queue *pq)
 {
-	uint32_t head = pq->arb_inq_head;
-	uint32_t tail = pq->arb_cacheq_tail;
-	uint32_t head_first = head;
-	int n = 0;
-
-	/* cacheq should always be empty at this point */
-	while (pq->inq[head]) {
-		n++;
-		pq->cacheq[tail] = pq->inq[head];
-		
-		pspat_next(head);
-		pspat_next(tail);
-		if (unlikely(head == head_first)) {
-			pq->arb_inq_full = 1;
-			break;
-		}
-	}
-	pq->arb_inq_head = head;
-	pq->arb_cacheq_tail = tail;
-
-	return n;
+	struct pspat_mailbox *m = pspat_arb_get_mb(pq);
+	if (m == NULL)
+		return 0;
+	return !pspat_mb_empty(m);
 }
 
 /* extract skb from the local queue */
 static struct sk_buff *
 pspat_arb_get_skb(struct pspat_queue *pq)
 {
-	uint32_t head = pq->arb_cacheq_head;
-	struct sk_buff *skb = pq->cacheq[head];
+	struct pspat_mailbox *m;
+	struct sk_buff *skb;
+
+retry:
+	/* first, get the current mailbox fro this cpu */
+	m = pspat_arb_get_mb(pq);
+	if (m == NULL)
+		return NULL;
+	/* try to extract an skb from the current mailbox */
+	skb = pspat_mb_extract(m);
 	if (skb) {
-		pq->cacheq[head] = NULL;
-		pspat_next(pq->arb_cacheq_head);
+		if (unlikely(skb == PSPAT_LAST_SKB)) {
+			/* special value: the client is gone */
+			pspat_mb_delete(m);
+			pq->arb_last_mb = NULL;
+			goto retry;
+		}
+
+		/* let pspat_arb_ack() see this mailbox */
+		if (list_empty(&m->list)) {
+			list_add_tail(&m->list, &pq->mb_to_clear);
+		}
 	}
 	return skb;
-}
-
-static struct netdev_queue *
-pspat_get_txq(struct sk_buff *skb)
-{
-	struct net_device *dev = skb->dev;
-	return pspat_single_txq ? 
-		netdev_get_tx_queue(dev, 0) :
-		skb_get_tx_queue(dev, skb);
 }
 
 /* locally mark skb as eligible for transmission */
 static void
 pspat_mark(struct pspat *arb, struct sk_buff *skb)
 {
-	struct netdev_queue *txq = pspat_get_txq(skb);
+	struct netdev_queue *txq;
+
+	if (pspat_single_txq) {
+		skb_set_queue_mapping(skb, 0);
+	}
+	txq = skb_get_tx_queue(skb->dev, skb);
 
 	BUG_ON(skb->next);
 	if (txq->pspat_markq_tail) {
@@ -95,7 +131,7 @@ pspat_mark(struct pspat *arb, struct sk_buff *skb)
 }
 
 static uint64_t
-pspat_pkt_pico(uint64_t rate, unsigned int len)
+pspat_pkt_pico(unsigned int len)
 {
 	return ((8 * (NSEC_PER_SEC << 10)) * len) / pspat_rate;
 }
@@ -128,15 +164,37 @@ pspat_arb_publish(struct netdev_queue *txq)
 static void
 pspat_arb_ack(struct pspat_queue *pq)
 {
-	uint32_t ntc = pq->arb_inq_ntc;
-	uint32_t head = pq->arb_inq_head;
+	struct pspat_mailbox *mb_cursor, *mb_next;
 
-	while (ntc != head || pq->arb_inq_full) {
-		pq->inq[ntc] = NULL;
-		pspat_next(ntc);
-		pq->arb_inq_full = 0;
+	list_for_each_entry_safe(mb_cursor, mb_next,
+			&pq->mb_to_clear, list) {
+		pspat_mb_clear(mb_cursor);
+		list_del_init(&mb_cursor->list);
 	}
-	pq->arb_inq_ntc = ntc;
+}
+
+static void
+pspat_arb_drain(struct pspat_queue *pq)
+{
+	struct pspat_mailbox *m = pq->arb_last_mb;
+	struct sk_buff *skb;
+	int dropped = 0;
+
+	BUG_ON(!m);
+	while (!pspat_mb_empty(m)) {
+		skb = pspat_arb_get_skb(pq);
+		BUG_ON(!skb);
+		kfree_skb(skb);
+		dropped++;
+	}
+
+	if (!m->backpressure) {
+		m->backpressure = 1;
+	}
+	pq->arb_last_mb = NULL; /* save a call to pspat_mb_empty(m) */
+
+	printk("PSPAT drained mailbox %p [%d skbs]\n", m, dropped);
+	pspat_arb_backpressure_drop += dropped;
 }
 
 static void
@@ -146,7 +204,6 @@ pspat_arb_send(struct netdev_queue *txq)
 	struct sk_buff *skb = txq->pspat_markq_head;
 	int ret = NETDEV_TX_BUSY;
 
-
 	HARD_TX_LOCK(dev, txq, smp_processor_id());
 	if (!netif_xmit_frozen_or_stopped(txq))
 		skb = dev_hard_start_xmit(skb, dev, txq, &ret);
@@ -154,9 +211,9 @@ pspat_arb_send(struct netdev_queue *txq)
 		printk("txq stopped, drop %p\n", skb);
 	HARD_TX_UNLOCK(dev, txq);
 
-	if (ret == NETDEV_TX_BUSY) {
+	if (!dev_xmit_complete(ret)) {
 		// XXX we should requeue into the qdisc
-		kfree_skb(skb);
+		kfree_skb_list(skb);
 	} else {
 		pspat_xmit_ok ++;
 	}
@@ -175,7 +232,7 @@ pspat_do_arbiter(struct pspat *arb)
 	rcu_read_lock_bh();
 
 	/*
-	 * bring in pending packets, arrived between next_link_idle
+	 * bring in pending packets, arrived between pspat_next_link_idle
 	 * and now (we assume they arrived at last_check)
 	 */
 	notempty = 0;
@@ -183,27 +240,14 @@ pspat_do_arbiter(struct pspat *arb)
 		struct pspat_queue *pq = arb->queues + i;
 		struct sk_buff *skb;
 
-		if (unlikely(pspat_debug_xmit)) {
-			printk("Queue #%d: %u %u %u %u %u %u %u %u\n",
-				i,
-				pq->cli_inq_tail,
-				pq->cli_outq_head,
-				pq->arb_outq_tail,
-				pq->arb_inq_head,
-				pq->arb_inq_ntc,
-				pq->arb_cacheq_tail,
-				pq->arb_cacheq_head,
-				pq->arb_inq_full
-			      );
-		}
-
 		if (now < pq->arb_extract_next) {
 			continue;
 		}
 		pq->arb_extract_next = now + (pspat_arb_interval_ns << 10);
 
 		/* 
-		 * copy the new skbs from pq to our local cache.
+		 * copy the new skbs from pq to our local cache
+		 * (the cache does not exist anymore)
 		 */
 		notempty += !!pspat_arb_fetch(pq);
 
@@ -232,9 +276,6 @@ pspat_do_arbiter(struct pspat *arb)
 				 */
 				spin_lock(qdisc_lock(q));
 				can_steal = qdisc_run_begin(q);
-				if (can_steal) {
-					set_bit(__QDISC_STATE_DEACTIVATED, &q->state);
-				}
 				spin_unlock(qdisc_lock(q));
 
 				if (!can_steal) {
@@ -278,12 +319,14 @@ pspat_do_arbiter(struct pspat *arb)
 				printk("enq(%p,%p)-->%d\n", q, skb, rc);
 			}
 			if (unlikely(rc)) {
+                                /* q->enqueue is starting to drop packets, e.g.
+                                 * one internal queue in the qdisc is full. We
+                                 * would like to propagate this signal to the
+                                 * client, so we set the backpressure flag. We
+                                 * also drain the mailbox because it may not be
+                                 * anymore in the clients list. */
 				pspat_arb_tc_enq_drop ++;
-				/* enqueue frees the skb by itself
-				 * in case of error, so we have nothing
-				 * to do here
-				 */
-				continue;
+				pspat_arb_drain(pq);
 			}
 		}
 	}
@@ -318,15 +361,15 @@ pspat_do_arbiter(struct pspat *arb)
 				printk("deq(%p)-->%p\n", q, skb);
 			}
 			q->pspat_next_link_idle +=
-				pspat_pkt_pico(pspat_rate, skb->len);
+				pspat_pkt_pico(skb->len);
 			ndeq++;
 			BUG_ON(!skb->sender_cpu);
 			pq = pspat_arb->queues + skb->sender_cpu - 1;
 			switch (pspat_xmit_mode) {
-			case 0:
+			case PSPAT_XMIT_MODE_ARB:
 				skb = validate_xmit_skb_list(skb, skb->dev);
 				/* fallthrough */
-			case 1:
+			case PSPAT_XMIT_MODE_DISPATCH:
 				/* validation is done in the sender threads */
 				pspat_mark(arb, skb);
 				break;
@@ -335,12 +378,20 @@ pspat_do_arbiter(struct pspat *arb)
 				break;
 			}
 		}
+
+                /* If the traffic on this root qdisc is not enough to fill
+                 * the link bandwidth, we need to move pspat_next_link_idle
+                 * forward, in order to avoid accumulating credits. */
+                if (q->pspat_next_link_idle <= now &&
+                            ndeq < q->pspat_batch_limit) {
+                    q->pspat_next_link_idle = now;
+                }
 	}
 
-	if (pspat_xmit_mode < 2) {
+	if (pspat_xmit_mode < PSPAT_XMIT_MODE_MAX) {
 		list_for_each_entry_safe(txq_cursor, txq_next,
 				&arb->active_txqs, pspat_active) {
-			if (pspat_xmit_mode == 0)
+			if (pspat_xmit_mode == PSPAT_XMIT_MODE_ARB)
 				pspat_arb_send(txq_cursor);
 			else
 				pspat_arb_publish(txq_cursor);
@@ -356,15 +407,27 @@ pspat_do_arbiter(struct pspat *arb)
 void
 pspat_shutdown(struct pspat *arb)
 {
-	struct Qdisc *q, **pq;
+	struct Qdisc *q, **_q;
+	int i;
 
-	for (pq = &arb->qdiscs, q = *pq; q; pq = &q->pspat_next, q = *pq) {
+	/* We need to drain all the queues to discover and free up
+	 * all dead mailboxes
+	 */
+	for (i = 0; i < arb->n_queues; i++) {
+		struct pspat_queue *pq = arb->queues + i;
+		struct sk_buff *skb;
+
+		while ( (skb = pspat_arb_get_skb(pq)) ) {
+			kfree_skb(skb);
+		}
+	}
+
+	for (_q = &arb->qdiscs, q = *_q; q; _q = &q->pspat_next, q = *_q) {
 		spin_lock(qdisc_lock(q));
 		qdisc_run_end(q);
-		clear_bit(__QDISC_STATE_DEACTIVATED, &q->state);
 		spin_unlock(qdisc_lock(q));
 		q->pspat_owned = 0;
-		*pq = NULL;
+		*_q = NULL;
 	}
 }
 
@@ -374,13 +437,9 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 {
 	int cpu, rc = NET_XMIT_SUCCESS;
 	struct pspat_queue *pq;
-	struct pspat *arb = rcu_dereference(pspat_arb);
+	struct pspat *arb;
 
-	if (unlikely(pspat_debug_xmit)) {
-		printk("handler(%p,%p)\n", arb, skb);
-	}
-
-	if (!(pspat_enable && arb)) {
+	if (!pspat_enable || (arb = rcu_dereference(pspat_arb)) == NULL) {
 		/* Not our business. */
 		return -ENOTTY;
 	}
@@ -400,7 +459,55 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	return rc;
 }
 
-/* Function implementing the arbiter. */
+void
+exit_pspat(void)
+{
+	struct pspat *arb;
+	struct pspat_queue *pq;
+	int cpu;
+
+	if (current->pspat_mb == NULL)
+		return;
+
+retry:
+	rcu_read_lock();
+	arb = rcu_dereference(pspat_arb);
+	if (arb) {
+		/* if the arbiter is running, we cannot delete the mailbox
+		 * by ourselves. Instead, we send the PSPAT_LAST_SKB to
+		 * notifiy the arbiter of our departure
+		 */
+		cpu = get_cpu();
+		pq = arb->queues + cpu;
+		if (pspat_cli_push(pq, PSPAT_LAST_SKB) == 0) {
+			current->pspat_mb = NULL;
+		}
+		put_cpu();
+	}
+	rcu_read_unlock();
+	if (current->pspat_mb) {
+		/* the mailbox is still there */
+		if (arb) {
+			/* we failed to push PSPAT_LAST_SKB but the
+			 * arbiter was running. We must try again
+			 */
+			printk("PSPAT Try again to destroy mailbox\n");
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule_timeout(100);
+			goto retry;
+		} else {
+			/* the arbiter is not running. Since
+			 * pspat_shutdown() drains everything, any
+			 * new arbiter will not see this mailbox.
+			 * Therefore, we can safely free it up.
+			 */
+			pspat_mb_delete(current->pspat_mb);
+			current->pspat_mb = NULL;
+		}
+	}
+}
+
+/* Function implementing the transmitter. */
 int
 pspat_do_sender(struct pspat *arb)
 {

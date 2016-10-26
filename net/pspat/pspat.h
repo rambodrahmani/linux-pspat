@@ -1,45 +1,28 @@
 #ifndef __PSPAT_H__
 #define __PSPAT_H__
 
-#define START_NEW_CACHELINE	____cacheline_aligned_in_smp
+#include <linux/mailbox.h>
 
-#define PSPAT_QLEN           512
-
+/* per-cpu data structure */
 struct pspat_queue {
-	/* Input queue, written by clients, read by the arbiter. */
-	START_NEW_CACHELINE
-	struct sk_buff		*inq[PSPAT_QLEN];
+	/* Input queue, a mailbox of mailbox pointers.
+	 * written by clients, read by the arbiter. */
+	struct pspat_mailbox   *inq;
 
-	/* Data structures private to the clients. */
+	/* client fields */
 	START_NEW_CACHELINE
-	uint32_t		cli_inq_tail; /* insertion point in inq  */
-	uint32_t		cli_outq_head; /* extraction point from outq */
+	struct pspat_mailbox   *cli_last_mb;
 
-	/* Output queue, written by the arbiter, read by senders. */
+	/* arbiter fields */
 	START_NEW_CACHELINE
-	struct sk_buff		*outq[PSPAT_QLEN];
-
-	/* Data structures private to the arbiter. */
-	START_NEW_CACHELINE
-	uint32_t		arb_outq_tail; /* insertion point in outq  */
-	uint32_t		arb_inq_head; /* extraction point from inq */
-	uint32_t		arb_inq_ntc;  /* next to clean */
-	uint32_t		arb_cacheq_tail;
-	uint32_t		arb_cacheq_head;
 	s64			arb_extract_next;
-	int			arb_inq_full;
-
-	struct sk_buff		*cacheq[PSPAT_QLEN];
-	struct sk_buff		*markq[PSPAT_QLEN];
-
-	/* Data structures private to the sender. */
-	START_NEW_CACHELINE
-	uint32_t		snd_outq_head; /* extraction point from outq  */
+	struct pspat_mailbox   *arb_last_mb;
+	struct list_head	mb_to_clear;
 };
 
 struct pspat {
-	/* to notify arbiter, currently unused. */
-	wait_queue_head_t	wqh;
+	struct task_struct	*arb_task;
+	struct task_struct	*snd_task;
 
 	/* list of all the qdiscs that we stole from the system */
 	struct Qdisc	       *qdiscs;
@@ -60,8 +43,13 @@ void pspat_shutdown(struct pspat *arb);
 
 int pspat_do_sender(struct pspat *arb);
 
+int pspat_create_client_queue(void);
+
 extern int pspat_enable;
 extern int pspat_debug_xmit;
+#define PSPAT_XMIT_MODE_ARB		0 /* packets sent by the arbiter */
+#define PSPAT_XMIT_MODE_DISPATCH	1 /* packets sent by dispatcher */
+#define PSPAT_XMIT_MODE_MAX		2 /* packets dropped by the arbiter */
 extern int pspat_xmit_mode;
 extern int pspat_tc_bypass;
 extern int pspat_single_txq;
@@ -69,6 +57,7 @@ extern u64 pspat_rate;
 extern s64 pspat_arb_interval_ns;
 extern u64 pspat_arb_tc_enq_drop;
 extern u64 pspat_arb_tc_deq;
+extern u64 pspat_arb_backpressure_drop;
 extern u64 pspat_xmit_ok;
 extern u64 *pspat_rounds;
 extern uint32_t pspat_qdisc_batch_limit;
