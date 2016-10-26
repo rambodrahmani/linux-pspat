@@ -3,6 +3,9 @@ This module implements the PSPAT scheduler.
 It registers the hook 'pspat_handler' in net/core/dev.c :: __dev_xmit_skb()
 which in turn replaces __dev_xmkt_skb()
 
+make menuconfig creates a pspat entry in
+	networking_support -> networking_options
+
 functions.c
 	body of the arbiter
 
