@@ -200,6 +200,10 @@ static struct pci_error_handlers e1000_err_handler = {
 	.resume = e1000_io_resume,
 };
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
+#include <if_e1000_netmap.h>
+#endif
+
 static struct pci_driver e1000_driver = {
 	.name     = e1000_driver_name,
 	.id_table = e1000_pci_tbl,
@@ -222,10 +226,6 @@ MODULE_VERSION(DRV_VERSION);
 static int debug = NETIF_MSG_DRV | NETIF_MSG_PROBE;
 module_param(debug, int, 0);
 MODULE_PARM_DESC(debug, "Debug level (0=none,...,16=all)");
-
-#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE)
-#include <if_e1000_netmap.h>
-#endif
 
 /**
  * e1000_get_hw_dev - return device
