@@ -6956,8 +6956,8 @@ static bool igb_clean_tx_irq(struct igb_q_vector *q_vector, int napi_budget)
 	if (test_bit(__IGB_DOWN, &adapter->state))
 		return true;
 #ifdef DEV_NETMAP
-        if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index))
-                return 1; /* cleaned ok */
+        if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index) != NM_IRQ_PASS)
+                return true; /* cleaned ok */
 #endif /* DEV_NETMAP */
 
 	tx_buffer = &tx_ring->tx_buffer_info[i];
@@ -7513,8 +7513,13 @@ static int igb_clean_rx_irq(struct igb_q_vector *q_vector, const int budget)
 	u16 cleaned_count = igb_desc_unused(rx_ring);
 
 #ifdef DEV_NETMAP
-	if (netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &total_packets))
-		return true;
+	/*
+	 * 	 Same as the txeof routine: only wakeup clients on intr.
+	 */
+	int nm_irq;
+	nm_irq = netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &total_packets);
+	if (nm_irq != NM_IRQ_PASS)
+		return (nm_irq == NM_IRQ_RESCHED) ? budget : 1;
 #endif /* DEV_NETMAP */
 	while (likely(total_packets < budget)) {
 		union e1000_adv_rx_desc *rx_desc;
