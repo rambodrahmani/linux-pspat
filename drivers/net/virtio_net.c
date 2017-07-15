@@ -1142,7 +1142,7 @@ static int virtnet_open(struct net_device *dev)
 
         if (ok) {
             for (i = 0; i < vi->max_queue_pairs; i++)
-		virtnet_napi_enable(&vi->rq[i]);
+		virtnet_napi_enable(vi->rq[i].vq, &vi->rq[i].napi);
             return 0;
         }
 #endif
