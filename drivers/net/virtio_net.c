@@ -1129,17 +1129,6 @@ static int virtnet_receive(struct receive_queue *rq, int budget, bool *xdp_xmit)
 	void *buf;
 	struct virtnet_stats *stats = this_cpu_ptr(vi->stats);
 
-#ifdef DEV_NETMAP
-        int work_done = 0;
-
-        if (netmap_rx_irq(vi->dev, vq2rxq(rq->vq), &work_done)) {
-		napi_complete(napi);
-		ND("called netmap_rx_irq");
-
-                return 1;
-        }
-#endif
-
 	if (!vi->big_packets || vi->mergeable_rx_bufs) {
 		void *ctx;
 
