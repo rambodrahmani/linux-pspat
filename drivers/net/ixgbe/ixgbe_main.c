@@ -2986,6 +2986,9 @@ static int ixgbe_up_complete(struct ixgbe_adapter *adapter)
 	for (i = 0; i < adapter->num_tx_queues; i++) {
 		j = adapter->tx_ring[i]->reg_idx;
 		txdctl = IXGBE_READ_REG(hw, IXGBE_TXDCTL(j));
+#ifdef DEV_NETMAP // XXX i and j are the same ?
+		txdctl = ixgbe_netmap_configure_tx_ring(adapter, j, txdctl);
+#endif /* DEV_NETMAP */
 		txdctl |= IXGBE_TXDCTL_ENABLE;
 		IXGBE_WRITE_REG(hw, IXGBE_TXDCTL(j), txdctl);
 		if (hw->mac.type == ixgbe_mac_82599EB) {
@@ -3000,9 +3003,6 @@ static int ixgbe_up_complete(struct ixgbe_adapter *adapter)
 				DPRINTK(DRV, ERR, "Could not enable "
 				        "Tx Queue %d\n", j);
 		}
-#ifdef DEV_NETMAP // XXX i and j are the same ?
-		ixgbe_netmap_configure_tx_ring(adapter, j);
-#endif /* DEV_NETMAP */
 
 	}
 
