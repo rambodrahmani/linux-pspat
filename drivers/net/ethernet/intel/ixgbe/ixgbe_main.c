@@ -3570,6 +3570,10 @@ void ixgbe_configure_tx_ring(struct ixgbe_adapter *adapter,
 	memset(ring->tx_buffer_info, 0,
 	       sizeof(struct ixgbe_tx_buffer) * ring->count);
 
+#ifdef DEV_NETMAP
+	txdctl = ixgbe_netmap_configure_tx_ring(adapter, reg_idx, txdctl);
+#endif /* DEV_NETMAP */
+
 	/* enable queue */
 	IXGBE_WRITE_REG(hw, IXGBE_TXDCTL(reg_idx), txdctl);
 
@@ -3584,10 +3588,7 @@ void ixgbe_configure_tx_ring(struct ixgbe_adapter *adapter,
 		txdctl = IXGBE_READ_REG(hw, IXGBE_TXDCTL(reg_idx));
 	} while (--wait_loop && !(txdctl & IXGBE_TXDCTL_ENABLE));
 	if (!wait_loop)
-		hw_dbg(hw, "Could not enable Tx Queue %d\n", reg_idx);
-#ifdef DEV_NETMAP
-	ixgbe_netmap_configure_tx_ring(adapter, reg_idx);
-#endif /* DEV_NETMAP */
+		e_err(drv, "Could not enable Tx Queue %d\n", reg_idx);
 }
 
 static void ixgbe_setup_mtqc(struct ixgbe_adapter *adapter)
