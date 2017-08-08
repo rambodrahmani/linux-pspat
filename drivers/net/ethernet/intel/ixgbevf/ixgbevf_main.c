@@ -1625,6 +1625,10 @@ static void ixgbevf_configure_tx_ring(struct ixgbevf_adapter *adapter,
 
 	clear_bit(__IXGBEVF_HANG_CHECK_ARMED, &ring->state);
 
+#ifdef DEV_NETMAP
+	txdctl = ixgbe_netmap_configure_tx_ring(adapter, reg_idx, txdctl);
+#endif /* DEV_NETMAP */
+
 	IXGBE_WRITE_REG(hw, IXGBE_VFTXDCTL(reg_idx), txdctl);
 
 	/* poll to verify queue is enabled */
@@ -1634,9 +1638,6 @@ static void ixgbevf_configure_tx_ring(struct ixgbevf_adapter *adapter,
 	}  while (--wait_loop && !(txdctl & IXGBE_TXDCTL_ENABLE));
 	if (!wait_loop)
 		pr_err("Could not enable Tx Queue %d\n", reg_idx);
-#ifdef DEV_NETMAP
-	ixgbe_netmap_configure_tx_ring(adapter, reg_idx);
-#endif /* DEV_NETMAP */
 }
 
 /**
