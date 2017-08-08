@@ -1379,7 +1379,7 @@ static void ixgbevf_configure_tx(struct ixgbevf_adapter *adapter)
 		txctrl = IXGBE_READ_REG(hw, IXGBE_VFDCA_TXCTRL(j));
 		txctrl &= ~IXGBE_DCA_TXCTRL_TX_WB_RO_EN;
 #ifdef DEV_NETMAP
-		txctrl = ixgbe_netmap_configure_tx_ring(adapter, i, txctl);
+		txctrl = ixgbe_netmap_configure_tx_ring(adapter, i, txctrl);
 #endif /* DEV_NETMAP */
 		IXGBE_WRITE_REG(hw, IXGBE_VFDCA_TXCTRL(j), txctrl);
 	}
