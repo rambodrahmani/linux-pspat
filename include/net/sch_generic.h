@@ -83,6 +83,12 @@ struct Qdisc {
 	struct gnet_stats_basic_cpu __percpu *cpu_bstats;
 	struct gnet_stats_queue	__percpu *cpu_qstats;
 
+#ifdef CONFIG_PSPAT
+	int			pspat_owned;
+	struct Qdisc	       *pspat_next;
+	s64			pspat_next_link_idle;
+	uint32_t		pspat_batch_limit;
+#endif /* CONFIG_PSPAT */
 	/*
 	 * For performance sake on SMP, we put highly modified fields at the end
 	 */
