@@ -231,12 +231,6 @@ pspat_txqs_flush(struct list_head *txqs)
 	}
 }
 
-static uint64_t
-pspat_pkt_pico(unsigned int len)
-{
-	return ((8 * (NSEC_PER_SEC << 10)) * len) / pspat_rate;
-}
-
 /* Function implementing the arbiter. */
 int
 pspat_do_arbiter(struct pspat *arb)
@@ -247,6 +241,16 @@ pspat_do_arbiter(struct pspat *arb)
 	/* list of all netdev_queue on which we are actively
 	 * transmitting */
 	struct list_head active_txqs;
+	static uint64_t last_pspat_rate = 0;
+	static uint64_t picos_per_byte = 1;
+
+	if (unlikely(pspat_rate != last_pspat_rate)) {
+		/* Avoid division in the dequeue stage below by
+		 * precomputing the number of pseudo-picoseconds per byte.
+		 * Recomputation is done only when needed. */
+		last_pspat_rate = pspat_rate;
+		picos_per_byte = (8 * (NSEC_PER_SEC << 10)) / last_pspat_rate;
+	}
 
 	rcu_read_lock_bh();
 
@@ -379,7 +383,7 @@ pspat_do_arbiter(struct pspat *arb)
 			if (unlikely(pspat_debug_xmit)) {
 				printk("deq(%p)-->%p\n", q, skb);
 			}
-			q->pspat_next_link_idle += pspat_pkt_pico(skb->len);
+			q->pspat_next_link_idle += picos_per_byte * skb->len;
 			ndeq++;
 
 			if (pspat_single_txq) { /* possibly override txq */
