@@ -361,8 +361,9 @@ pspat_do_arbiter(struct pspat *arb)
 	INIT_LIST_HEAD(&active_txqs);
 	for (q = arb->qdiscs; q; q = q->pspat_next) {
 		int ndeq = 0;
+		s64 next_link_idle = q->pspat_next_link_idle;
 
-		while (q->pspat_next_link_idle <= now &&
+		while (next_link_idle <= now &&
 			ndeq < q->pspat_batch_limit)
 		{
 			struct sk_buff *skb = q->dequeue(q);
@@ -383,7 +384,7 @@ pspat_do_arbiter(struct pspat *arb)
 			if (unlikely(pspat_debug_xmit)) {
 				printk("deq(%p)-->%p\n", q, skb);
 			}
-			q->pspat_next_link_idle += picos_per_byte * skb->len;
+			next_link_idle += picos_per_byte * skb->len;
 			ndeq++;
 
 			if (pspat_single_txq) { /* possibly override txq */
@@ -404,12 +405,12 @@ pspat_do_arbiter(struct pspat *arb)
 		}
 
                 /* If the traffic on this root qdisc is not enough to fill
-                 * the link bandwidth, we need to move pspat_next_link_idle
+                 * the link bandwidth, we need to move next_link_idle
                  * forward, in order to avoid accumulating credits. */
-                if (q->pspat_next_link_idle <= now &&
-                            ndeq < q->pspat_batch_limit) {
-                    q->pspat_next_link_idle = now;
+                if (next_link_idle <= now && ndeq < q->pspat_batch_limit) {
+                    next_link_idle = now;
                 }
+		q->pspat_next_link_idle = next_link_idle;
 	}
 
 	if (pspat_xmit_mode == PSPAT_XMIT_MODE_ARB) {
