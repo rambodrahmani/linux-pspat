@@ -261,6 +261,7 @@ pspat_do_arbiter(struct pspat *arb)
 	notempty = 0;
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
+		struct sk_buff *to_free = NULL;
 		struct sk_buff *skb;
 
 		if (now < pq->arb_extract_next) {
@@ -337,7 +338,7 @@ pspat_do_arbiter(struct pspat *arb)
 				q->pspat_batch_limit = pspat_qdisc_batch_limit;
 			}
 
-			rc = q->enqueue(skb, q, NULL) & NET_XMIT_MASK;
+			rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
 			if (unlikely(pspat_debug_xmit)) {
 				printk("enq(%p,%p)-->%d\n", q, skb, rc);
 			}
@@ -351,6 +352,9 @@ pspat_do_arbiter(struct pspat *arb)
 				pspat_arb_tc_enq_drop ++;
 				pspat_arb_drain(pq);
 			}
+		}
+		if (to_free) {
+			kfree_skb_list(to_free);
 		}
 	}
 	pspat_rounds[notempty]++;
