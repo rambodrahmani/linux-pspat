@@ -6,7 +6,7 @@
 #include <assert.h>
 
 /*
- * Glue code.
+ * Glue code to compile the in-kernel mailbox code in user-space.
  */
 #define kfree(x) free(x)
 #define kmalloc(x, y) malloc((x))

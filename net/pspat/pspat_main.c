@@ -21,14 +21,14 @@ DEFINE_MUTEX(pspat_glock);
 struct pspat *pspat_arb;  /* RCU-dereferenced */
 static struct pspat *arbp; /* For internal usage */
 
-int pspat_enable = 0;
-int pspat_debug_xmit = 0;
-int pspat_xmit_mode = PSPAT_XMIT_MODE_ARB;
-int pspat_single_txq = 1; /* use only one hw queue */
-int pspat_tc_bypass = 0;
-u64 pspat_rate = 40000000000; // 40Gb/s
-s64 pspat_arb_interval_ns = 1000;
-u32 pspat_qdisc_batch_limit = 40;
+int pspat_enable __read_mostly = 0;
+int pspat_debug_xmit __read_mostly = 0;
+int pspat_xmit_mode __read_mostly = PSPAT_XMIT_MODE_ARB;
+int pspat_single_txq __read_mostly = 1; /* use only one hw queue */
+int pspat_tc_bypass __read_mostly = 0;
+u64 pspat_rate __read_mostly = 40000000000; // 40Gb/s
+s64 pspat_arb_interval_ns __read_mostly = 1000;
+u32 pspat_qdisc_batch_limit __read_mostly = 40;
 u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_backpressure_drop = 0;
 u64 pspat_arb_tc_deq = 0;
