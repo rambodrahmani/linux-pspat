@@ -49,6 +49,16 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 	return 0;
 }
 
+static void
+pspat_cli_delete(struct pspat_mailbox *m)
+{
+	/* possibily remove this mb from the ack list */
+	if (!list_empty(&m->list)) {
+		list_del_init(&m->list);
+	}
+	pspat_mb_delete(m);
+}
+
 static struct pspat_mailbox *
 pspat_arb_get_mb(struct pspat_queue *pq)
 {
@@ -96,7 +106,7 @@ retry:
 	if (skb) {
 		if (unlikely(skb == PSPAT_LAST_SKB)) {
 			/* special value: the client is gone */
-			pspat_mb_delete(m);
+			pspat_cli_delete(m);
 			pq->arb_last_mb = NULL;
 			goto retry;
 		}
@@ -524,7 +534,7 @@ retry:
 			 * new arbiter will not see this mailbox.
 			 * Therefore, we can safely free it up.
 			 */
-			pspat_mb_delete(current->pspat_mb);
+			pspat_cli_delete(current->pspat_mb);
 			current->pspat_mb = NULL;
 		}
 	}
