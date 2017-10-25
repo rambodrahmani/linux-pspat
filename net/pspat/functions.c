@@ -73,7 +73,7 @@ pspat_arb_get_mb(struct pspat_queue *pq)
 			smp_mb();
 		}
 	}
-	return pq->arb_last_mb;
+	return m;
 }
 
 /* copy new skbs from client queue to local queue
