@@ -1,10 +1,12 @@
 #ifndef __PSPAT_MAILBOX_H
 #define __PSPAT_MAILBOX_H
 
+#ifdef __KERNEL__
 #include <linux/kernel.h>
 #include <linux/prefetch.h>
 
 #define START_NEW_CACHELINE	____cacheline_aligned_in_smp
+#endif /* __KERNEL__ */
 
 struct pspat_mailbox {
 	/* shared (constant) fields */

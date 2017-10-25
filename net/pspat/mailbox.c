@@ -1,5 +1,7 @@
+#ifdef __KERNEL__
 #include <linux/gfp.h>
 #include <linux/slab.h>
+#endif /* __KERNEL__ */
 #include "mailbox.h"
 
 struct pspat_mailbox*
