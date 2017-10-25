@@ -256,17 +256,16 @@ pspat_do_arbiter(struct pspat *arb)
 		pq->arb_extract_next = now + (pspat_arb_interval_ns << 10);
 
 		while ( (skb = pspat_arb_get_skb(pq)) ) {
-			struct net_device *dev = skb->dev;
-			struct netdev_queue *txq;
 			int rc;
 
-			/* 
-			 * the client chose the txq before sending
-			 * the skb to us, so we only need to recover it
-			 */
-			BUG_ON(dev == NULL);
-
 			if (!pspat_tc_bypass) {
+				/*
+				 * the client chose the txq before sending
+				 * the skb to us, so we only need to recover it
+				 */
+				struct net_device *dev = skb->dev;
+				struct netdev_queue *txq;
+				BUG_ON(dev == NULL);
 				txq = skb_get_tx_queue(dev, skb);
 				q = rcu_dereference_bh(txq->qdisc);
 			}
