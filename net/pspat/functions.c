@@ -80,19 +80,6 @@ pspat_arb_get_mb(struct pspat_queue *pq)
 	return m;
 }
 
-/* copy new skbs from client queue to local queue
- * There must be a call to pspat_arb_ack between
- * any two calls to pspat_arb_fetch
- */
-static int
-pspat_arb_fetch(struct pspat_queue *pq)
-{
-	struct pspat_mailbox *m = pspat_arb_get_mb(pq);
-	if (m == NULL)
-		return 0;
-	return !pspat_mb_empty(m);
-}
-
 /* extract skb from the local queue */
 static struct sk_buff *
 pspat_arb_get_skb(struct pspat_queue *pq)
@@ -247,7 +234,7 @@ pspat_txqs_flush(struct list_head *txqs)
 int
 pspat_do_arbiter(struct pspat *arb)
 {
-	int i, notempty;
+	int i;
 	s64 now = ktime_get_ns() << 10;
 	struct Qdisc *q = &arb->bypass_qdisc;
 	/* list of all netdev_queue on which we are actively
@@ -270,7 +257,6 @@ pspat_do_arbiter(struct pspat *arb)
 	 * bring in pending packets, arrived between pspat_next_link_idle
 	 * and now (we assume they arrived at last_check)
 	 */
-	notempty = 0;
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
 		struct sk_buff *to_free = NULL;
@@ -281,24 +267,17 @@ pspat_do_arbiter(struct pspat *arb)
 		}
 		pq->arb_extract_next = now + (pspat_arb_interval_ns << 10);
 
-		/* 
-		 * copy the new skbs from pq to our local cache
-		 * (the cache does not exist anymore)
-		 */
-		notempty += !!pspat_arb_fetch(pq);
-
 		while ( (skb = pspat_arb_get_skb(pq)) ) {
-			struct net_device *dev = skb->dev;
-			struct netdev_queue *txq;
 			int rc;
 
-			/* 
-			 * the client chose the txq before sending
-			 * the skb to us, so we only need to recover it
-			 */
-			BUG_ON(dev == NULL);
-
 			if (!pspat_tc_bypass) {
+				/*
+				 * the client chose the txq before sending
+				 * the skb to us, so we only need to recover it
+				 */
+				struct net_device *dev = skb->dev;
+				struct netdev_queue *txq;
+				BUG_ON(dev == NULL);
 				txq = skb_get_tx_queue(dev, skb);
 				q = rcu_dereference_bh(txq->qdisc);
 			}
@@ -369,7 +348,6 @@ pspat_do_arbiter(struct pspat *arb)
 			kfree_skb_list(to_free);
 		}
 	}
-	pspat_rounds[notempty]++;
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
 		pspat_arb_ack(pq);     /* to clients */
