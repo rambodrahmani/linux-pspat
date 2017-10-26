@@ -8,10 +8,14 @@
 #define START_NEW_CACHELINE	____cacheline_aligned_in_smp
 #endif /* __KERNEL__ */
 
+#define PSPAT_MB_NAMSZ	32
 #define PSPAT_INVALID	0x2
+
+#define PSPAT_MB_DEBUG 1
 
 struct pspat_mailbox {
 	/* shared (constant) fields */
+	char			name[PSPAT_MB_NAMSZ];
 	unsigned long		entry_mask;
 	unsigned long		seqbit_shift;
 	unsigned long		line_entries;
@@ -44,25 +48,28 @@ static inline size_t pspat_mb_size(unsigned long entries)
 
 /**
  * pspat_mb_new - create a new mailbox
+ * @name: an aritrary name for the mailbox (debug)
  * @entries: the number of entries
  * @line_size: the line size in bytes
  *
  * Both entries and line_size must be a power of 2.
  * Returned pointer must be checked with IS_ERR().
  */
-struct pspat_mailbox *pspat_mb_new(unsigned long entries, unsigned long line_size);
+struct pspat_mailbox *pspat_mb_new(const char *name, unsigned long entries,
+		unsigned long line_size);
 
 
 /**
  * pspat_mb_init - initialize a pre-allocated mailbox
  * @m: the mailbox to be initialized
+ * @name: an aritrary name for the mailbox (debug)
  * @entries: the number of entries
  * @line_size: the line size in bytes
  *
  * Both entries and line_size must be a power of 2.
  * Returns 0 on success, -errno on failure.
  */
-int pspat_mb_init(struct pspat_mailbox *m, unsigned long entries,
+int pspat_mb_init(struct pspat_mailbox *m, const char *name, unsigned long entries,
 		unsigned long line_size);
 
 /**

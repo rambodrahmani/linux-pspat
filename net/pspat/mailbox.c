@@ -5,7 +5,7 @@
 #include "mailbox.h"
 
 struct pspat_mailbox*
-pspat_mb_new(unsigned long entries, unsigned long line_size)
+pspat_mb_new(const char *name, unsigned long entries, unsigned long line_size)
 {
 	struct pspat_mailbox *m;
 	int err;
@@ -14,7 +14,7 @@ pspat_mb_new(unsigned long entries, unsigned long line_size)
 	if (m == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	err = pspat_mb_init(m, entries, line_size);
+	err = pspat_mb_init(m, name, entries, line_size);
 	if (err) {
 		kfree(m);
 		return ERR_PTR(err);
@@ -24,14 +24,17 @@ pspat_mb_new(unsigned long entries, unsigned long line_size)
 }
 
 int
-pspat_mb_init(struct pspat_mailbox *m, unsigned long entries,
-		unsigned long line_size)
+pspat_mb_init(struct pspat_mailbox *m, const char *name,
+		unsigned long entries, unsigned long line_size)
 {
 	unsigned long entries_per_line;
 
 	if (!is_power_of_2(entries) || !is_power_of_2(line_size) ||
 			entries <= 2 * line_size || line_size < sizeof(uintptr_t))
 		return -EINVAL;
+
+	strncpy(m->name, name, PSPAT_MB_NAMSZ);
+	m->name[PSPAT_MB_NAMSZ - 1 ] = '\0';
 
 	entries_per_line = line_size / sizeof(uintptr_t);
 
@@ -40,9 +43,11 @@ pspat_mb_init(struct pspat_mailbox *m, unsigned long entries,
 	m->entry_mask = entries - 1;
 	m->seqbit_shift = ilog2(entries);
 
-	printk("line_entries %lu line_mask %lx entry_mask %lx seqbit_shift %lu\n",
-		m->line_entries, m->line_mask, m->entry_mask, m->seqbit_shift);
-	
+#ifdef PSPAT_MB_DEBUG
+	printk("PSPAT: mb %p %s: line_entries %lu line_mask %lx entry_mask %lx seqbit_shift %lu\n",
+		m, m->name, m->line_entries, m->line_mask, m->entry_mask, m->seqbit_shift);
+#endif
+
 	m->cons_clear = 0;
 	m->cons_read = m->line_entries;
 	m->prod_write = m->line_entries;
@@ -56,6 +61,9 @@ pspat_mb_init(struct pspat_mailbox *m, unsigned long entries,
 void
 pspat_mb_delete(struct pspat_mailbox *m)
 {
+#ifdef PSPAT_MB_DEBUG
+	printk("PSPAT: deleting mb %s\n", m->name);
+#endif
 	kfree(m);
 }
 
@@ -66,6 +74,10 @@ pspat_mb_cancel(struct pspat_mailbox *m, uintptr_t v)
 	
 	for (;;) {
 		uintptr_t v1 = m->q[scan & m->entry_mask];
+
+#ifdef PSPAT_MB_DEBUG
+		printk("PSPAT: mb %s scan %ld cancel %lx: elem %lx\n", m->name, scan, v, v1);
+#endif
 
 		if (__pspat_mb_empty(m, scan, v1))
 			break;

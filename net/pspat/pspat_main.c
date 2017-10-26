@@ -441,11 +441,14 @@ int
 pspat_create_client_queue(void)
 {
 	struct pspat_mailbox *m;
+	char name[PSPAT_MB_NAMSZ];
 
 	if (current->pspat_mb)
 		return 0;
 
-	m = pspat_mb_new(pspat_mailbox_entries, pspat_mailbox_line_size);
+	snprintf(name, PSPAT_MB_NAMSZ, "CM-%d", current->pid);
+
+	m = pspat_mb_new(name, pspat_mailbox_entries, pspat_mailbox_line_size);
 	if (m == NULL)
 		return -ENOMEM;
 	current->pspat_mb = m;
@@ -501,7 +504,9 @@ pspat_create(void)
 	/* initialize all mailboxes */
 	m = (void *)arbp + arb_size;
 	for (i = 0; i < cpus; i++) {
-		ret = pspat_mb_init(m, mb_entries, mb_line_size);
+		char name[PSPAT_MB_NAMSZ];
+		snprintf(name, PSPAT_MB_NAMSZ, "CL-%d", i);
+		ret = pspat_mb_init(m, name, mb_entries, mb_line_size);
 		if (ret ) {
 			goto fail;
 		}
@@ -511,7 +516,9 @@ pspat_create(void)
 	}
 
 	for (i = 0; i < senders; i++) {
-		ret = pspat_mb_init(m, mb_entries, mb_line_size);
+		char name[PSPAT_MB_NAMSZ];
+		snprintf(name, PSPAT_MB_NAMSZ, "T-%d", i);
+		ret = pspat_mb_init(m, name, mb_entries, mb_line_size);
 		if (ret ) {
 			goto fail;
 		}
