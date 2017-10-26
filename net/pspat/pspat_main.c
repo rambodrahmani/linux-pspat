@@ -27,7 +27,7 @@ int pspat_xmit_mode __read_mostly = PSPAT_XMIT_MODE_ARB;
 int pspat_single_txq __read_mostly = 1; /* use only one hw queue */
 int pspat_tc_bypass __read_mostly = 0;
 u64 pspat_rate __read_mostly = 40000000000; // 40Gb/s
-s64 pspat_arb_interval_ns __read_mostly = 1000;
+u64 pspat_arb_interval_ns __read_mostly = 1000;
 u32 pspat_qdisc_batch_limit __read_mostly = 40;
 u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_backpressure_drop = 0;
@@ -141,7 +141,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	},
 	{
 		.procname	= "arb_interval_ns",
-		.maxlen		= sizeof(s64),
+		.maxlen		= sizeof(u64),
 		.mode		= 0644,
 		.data		= &pspat_arb_interval_ns,
 		.proc_handler	= &proc_doulongvec_minmax,

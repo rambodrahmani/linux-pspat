@@ -15,7 +15,7 @@ struct pspat_queue {
 
 	/* arbiter fields */
 	START_NEW_CACHELINE
-	s64			arb_extract_next;
+	u64			arb_extract_next;
 	struct pspat_mailbox   *arb_last_mb;
 	struct list_head	mb_to_clear;
 };
@@ -59,7 +59,7 @@ extern int pspat_xmit_mode;
 extern int pspat_tc_bypass;
 extern int pspat_single_txq;
 extern u64 pspat_rate;
-extern s64 pspat_arb_interval_ns;
+extern u64 pspat_arb_interval_ns;
 extern u64 pspat_arb_tc_enq_drop;
 extern u64 pspat_arb_backpressure_drop;
 extern u64 pspat_arb_tc_deq;

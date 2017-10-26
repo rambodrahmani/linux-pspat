@@ -235,7 +235,7 @@ int
 pspat_do_arbiter(struct pspat *arb)
 {
 	int i;
-	s64 now = ktime_get_ns() << 10;
+	u64 now = ktime_get_ns() << 10;
 	struct Qdisc *q = &arb->bypass_qdisc;
 	/* list of all netdev_queue on which we are actively
 	 * transmitting */
@@ -355,7 +355,7 @@ pspat_do_arbiter(struct pspat *arb)
 	INIT_LIST_HEAD(&active_txqs);
 	for (q = arb->qdiscs; q; q = q->pspat_next) {
 		int ndeq = 0;
-		s64 next_link_idle = q->pspat_next_link_idle;
+		u64 next_link_idle = q->pspat_next_link_idle;
 
 		while (next_link_idle <= now &&
 			ndeq < q->pspat_batch_limit)
