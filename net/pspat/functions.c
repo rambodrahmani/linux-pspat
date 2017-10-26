@@ -50,16 +50,20 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 }
 
 static void
-pspat_cli_delete(struct pspat_queue *pq, struct pspat_mailbox *m)
+pspat_cli_delete(struct pspat *arb, struct pspat_mailbox *m)
 {
-	/* remove any mention of m from the client list */
-	pspat_mb_cancel(pq->inq, (uintptr_t)m);
+	int i;
+	/* remove any mention of m from all the client lists */
+	for (i = 0; i < arb->n_queues; i++) {
+		struct pspat_queue *pq = arb->queues + i;
+		pspat_mb_cancel(pq->inq, (uintptr_t)m);
+		if (pq->arb_last_mb == m)
+			pq->arb_last_mb = NULL;
+	}
 	/* possibily remove this mb from the ack list */
 	if (!list_empty(&m->list)) {
 		list_del_init(&m->list);
 	}
-	if (pq->arb_last_mb == m)
-		pq->arb_last_mb = NULL;
 	pspat_mb_delete(m);
 }
 
@@ -82,7 +86,7 @@ pspat_arb_get_mb(struct pspat_queue *pq)
 
 /* extract skb from the local queue */
 static struct sk_buff *
-pspat_arb_get_skb(struct pspat_queue *pq)
+pspat_arb_get_skb(struct pspat *arb, struct pspat_queue *pq)
 {
 	struct pspat_mailbox *m;
 	struct sk_buff *skb;
@@ -97,8 +101,7 @@ retry:
 	if (skb) {
 		if (unlikely(skb == PSPAT_LAST_SKB)) {
 			/* special value: the client is gone */
-			pspat_cli_delete(pq, m);
-			pq->arb_last_mb = NULL;
+			pspat_cli_delete(arb, m);
 			goto retry;
 		}
 
@@ -171,14 +174,14 @@ pspat_arb_ack(struct pspat_queue *pq)
 }
 
 static void
-pspat_arb_drain(struct pspat_queue *pq)
+pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 {
 	struct pspat_mailbox *m = pq->arb_last_mb;
 	struct sk_buff *skb;
 	int dropped = 0;
 
 	BUG_ON(!m);
-	while ( (skb = pspat_arb_get_skb(pq)) ) {
+	while ( (skb = pspat_arb_get_skb(arb, pq)) ) {
 		kfree_skb(skb);
 		dropped++;
 	}
@@ -267,7 +270,7 @@ pspat_do_arbiter(struct pspat *arb)
 		}
 		pq->arb_extract_next = now + (pspat_arb_interval_ns << 10);
 
-		while ( (skb = pspat_arb_get_skb(pq)) ) {
+		while ( (skb = pspat_arb_get_skb(arb, pq)) ) {
 			int rc;
 
 			if (!pspat_tc_bypass) {
@@ -341,7 +344,7 @@ pspat_do_arbiter(struct pspat *arb)
                                  * also drain the mailbox because it may not be
                                  * anymore in the clients list. */
 				pspat_arb_tc_enq_drop ++;
-				pspat_arb_drain(pq);
+				pspat_arb_drain(arb, pq);
 			}
 		}
 		if (to_free) {
@@ -429,7 +432,7 @@ pspat_shutdown(struct pspat *arb)
 		struct pspat_queue *pq = arb->queues + i;
 		struct sk_buff *skb;
 
-		while ( (skb = pspat_arb_get_skb(pq)) ) {
+		while ( (skb = pspat_arb_get_skb(arb, pq)) ) {
 			kfree_skb(skb);
 		}
 	}
