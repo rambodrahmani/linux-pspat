@@ -191,9 +191,7 @@ pspat_arb_drain(struct pspat_queue *pq)
 	int dropped = 0;
 
 	BUG_ON(!m);
-	while (!pspat_mb_empty(m)) {
-		skb = pspat_arb_get_skb(pq);
-		BUG_ON(!skb);
+	while ( (skb = pspat_arb_get_skb(pq)) ) {
 		kfree_skb(skb);
 		dropped++;
 	}
