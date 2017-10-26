@@ -8,6 +8,8 @@
 #define START_NEW_CACHELINE	____cacheline_aligned_in_smp
 #endif /* __KERNEL__ */
 
+#define PSPAT_INVALID	0x2
+
 struct pspat_mailbox {
 	/* shared (constant) fields */
 	unsigned long		entry_mask;
@@ -91,9 +93,9 @@ static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
 	return 0;
 }
 
-static inline int __pspat_mb_empty(struct pspat_mailbox *m, uintptr_t v)
+static inline int __pspat_mb_empty(struct pspat_mailbox *m, unsigned long i, uintptr_t v)
 {
-	return (!v) || ((v ^ (m->cons_read >> m->seqbit_shift)) & 0x1);
+	return (!v) || ((v ^ (i >>  m->seqbit_shift)) & 0x1);
 }
 
 /**
@@ -106,7 +108,7 @@ static inline int pspat_mb_empty(struct pspat_mailbox *m)
 {
 	uintptr_t v = m->q[m->cons_read & m->entry_mask];
 
-	return __pspat_mb_empty(m, v);
+	return __pspat_mb_empty(m, m->cons_read, v);
 }
 
 /**
@@ -119,13 +121,20 @@ static inline int pspat_mb_empty(struct pspat_mailbox *m)
  */
 static inline void *pspat_mb_extract(struct pspat_mailbox *m)
 {
-	uintptr_t v = m->q[m->cons_read & m->entry_mask];
+	uintptr_t v;
+      
+retry:	
+	v = m->q[m->cons_read & m->entry_mask];
 
-	if (__pspat_mb_empty(m, v))
+	if (__pspat_mb_empty(m, m->cons_read, v))
 		return NULL;
 
+	v &= ~0x1;
 	m->cons_read++;
-	return (void *)(v & ~0x1);
+	if (unlikely(v == PSPAT_INVALID))
+		goto retry;
+
+	return (void *)v;
 }
 
 
@@ -143,5 +152,11 @@ static inline void pspat_mb_clear(struct pspat_mailbox *m)
 	}
 }
 
+/**
+ * pspat_mb_cancel - remove from the mailbox all instances of a value
+ * @m: the mailbox
+ * @v: the value to be removed
+ */
+void pspat_mb_cancel(struct pspat_mailbox *m, uintptr_t v);
 
 #endif /* __PSPAT_MAILBOX_H */
