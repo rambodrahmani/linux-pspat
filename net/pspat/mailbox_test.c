@@ -57,8 +57,7 @@ static inline int IS_ERR(const void *ptr)
 
 #include "mailbox.c"
 
-typedef int (*testfunc_t)(struct pspat_mailbox *mb, unsigned entries,
-			unsigned line_size);
+typedef int (*testfunc_t)(struct pspat_mailbox *mb, unsigned entries);
 
 #define EXPECT_TRUE(x) assert(!!(x))
 #define EXPECT_FALSE(x) assert(!(x))
@@ -90,8 +89,7 @@ mb_drain(struct pspat_mailbox *mb)
 }
 
 static int
-test1(struct pspat_mailbox *mb, unsigned entries,
-		 unsigned line_size)
+test1(struct pspat_mailbox *mb, unsigned entries)
 {
 	EXPECT_TRUE(pspat_mb_empty(mb));
 	return 0;
@@ -99,8 +97,7 @@ test1(struct pspat_mailbox *mb, unsigned entries,
 
 /* Insert into an empty mailbox. */
 static int
-test2(struct pspat_mailbox *mb, unsigned entries,
-		 unsigned line_size)
+test2(struct pspat_mailbox *mb, unsigned entries)
 {
 	EXPECT_TRUE(pspat_mb_empty(mb));
 	EXPECT_OK(pspat_mb_insert(mb, /*value=*/mb+1));
@@ -111,8 +108,7 @@ test2(struct pspat_mailbox *mb, unsigned entries,
 /* Insert into an empty mailbox, extract and check it is
  * now empty. */
 static int
-test3(struct pspat_mailbox *mb, unsigned entries,
-		 unsigned line_size)
+test3(struct pspat_mailbox *mb, unsigned entries)
 {
 	void *v;
 
@@ -127,8 +123,7 @@ test3(struct pspat_mailbox *mb, unsigned entries,
 /* Check we can fill the mb completely, and after
  * that we cannot insert anymore. */
 static int
-test4(struct pspat_mailbox *mb, unsigned entries,
-		 unsigned line_size)
+test4(struct pspat_mailbox *mb, unsigned entries)
 {
 	int n = mb_fill(mb);
 	EXPECT_EQ(n, entries - mb->line_entries);
@@ -141,8 +136,7 @@ test4(struct pspat_mailbox *mb, unsigned entries,
 /* Fill in and drain, checking that we got back everything
  * we had inserted. */
 static int
-test5(struct pspat_mailbox *mb, unsigned entries,
-		 unsigned line_size)
+test5(struct pspat_mailbox *mb, unsigned entries)
 {
 	int n = mb_fill(mb);
 	EXPECT_EQ(n, entries - mb->line_entries);
@@ -161,12 +155,12 @@ int main()
 
 	for (i = 0; tests[i] != NULL; i++) {
 		struct pspat_mailbox *mb;
-		assert(line_size > 0 && entries >= line_size);
+		assert(entries > 0);
 		mb = pspat_mb_new("test", entries, line_size);
 		assert(mb);
 		EXPECT_TRUE(pspat_mb_empty(mb));
 		printf("Running test #%d ...\n", i+1);
-		tests[i](mb, entries, line_size);
+		tests[i](mb, entries);
 		printf("... [OK]\n");
 		pspat_mb_delete(mb);
 	}
