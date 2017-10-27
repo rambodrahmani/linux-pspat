@@ -66,11 +66,11 @@ typedef int (*testfunc_t)(struct pspat_mailbox *mb, unsigned entries);
 #define EXPECT_EQ(x, y) assert((x) == (y))
 
 static int
-mb_fill(struct pspat_mailbox *mb)
+mb_fill_limit(struct pspat_mailbox *mb, unsigned limit)
 {
 	void *v = mb;
 	int n = 0;
-	while (pspat_mb_insert(mb, /*value=*/v) == 0) {
+	while (n < limit && pspat_mb_insert(mb, /*value=*/v) == 0) {
 		n ++;
 		v += 4;
 	}
@@ -78,14 +78,25 @@ mb_fill(struct pspat_mailbox *mb)
 }
 
 static int
-mb_drain(struct pspat_mailbox *mb)
+mb_fill(struct pspat_mailbox *mb)
+{
+	return mb_fill_limit(mb, ~0U);
+}
+
+static int
+mb_drain_limit(struct pspat_mailbox *mb, unsigned limit)
 {
 	int n = 0;
-	void *v;
-	while ((v = pspat_mb_extract(mb))) {
+	while (n < limit && pspat_mb_extract(mb) != NULL) {
 		n ++;
 	}
 	return n;
+}
+
+static int
+mb_drain(struct pspat_mailbox *mb)
+{
+	return mb_drain_limit(mb, ~0U);
 }
 
 static int
