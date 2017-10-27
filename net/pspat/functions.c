@@ -203,7 +203,6 @@ pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 	if (!m->backpressure) {
 		m->backpressure = 1;
 	}
-	pq->arb_last_mb = NULL; /* save a call to pspat_mb_empty(m) */
 
 	printk("PSPAT drained mailbox %p [%d skbs]\n", m, dropped);
 	pspat_arb_backpressure_drop += dropped;
