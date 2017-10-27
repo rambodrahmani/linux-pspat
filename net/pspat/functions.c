@@ -5,9 +5,6 @@
 
 #include "pspat.h"
 
-/* clients send this value on a mailbox when exiting */
-#define PSPAT_LAST_SKB	(void *)0x4
-
 /* push a new packet to the client queue
  * returns -ENOBUFS if the queue is full
  */

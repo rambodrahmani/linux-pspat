@@ -9,7 +9,6 @@
 #endif /* __KERNEL__ */
 
 #define PSPAT_MB_NAMSZ	32
-#define PSPAT_INVALID	0x2
 
 #define PSPAT_MB_DEBUG 1
 
@@ -130,20 +129,14 @@ static inline int pspat_mb_empty(struct pspat_mailbox *m)
  */
 static inline void *pspat_mb_extract(struct pspat_mailbox *m)
 {
-	uintptr_t v;
-      
-retry:	
-	v = m->q[m->cons_read & m->entry_mask];
+	uintptr_t v = m->q[m->cons_read & m->entry_mask];
 
 	if (__pspat_mb_empty(m, m->cons_read, v))
 		return NULL;
 
-	v &= ~0x1;
 	m->cons_read++;
-	if (unlikely(v == PSPAT_INVALID))
-		goto retry;
 
-	return (void *)v;
+	return (void *)(v & ~0x1);
 }
 
 
