@@ -177,8 +177,27 @@ test7(struct pspat_mailbox *mb, unsigned entries)
 	return 0;
 }
 
+/* Fill, drain and clear many times. */
+static int
+test8(struct pspat_mailbox *mb, unsigned entries)
+{
+	int maxn = entries - mb->line_entries;
+	int arbitrary_num_cycles = entries/3;
+	int i;
+
+	for (i = 0; i < arbitrary_num_cycles; i++) {
+		int n = mb_fill(mb);
+		EXPECT_EQ(n, maxn);
+		n = mb_drain(mb);
+		EXPECT_EQ(n, maxn);
+		pspat_mb_clear(mb);
+		EXPECT_TRUE(pspat_mb_empty(mb));
+	}
+	return 0;
+}
+
 static testfunc_t tests[] = { test1, test2, test3, test4, test5, test6,
-				test7, NULL };
+				test7, test8, NULL };
 
 int main()
 {
