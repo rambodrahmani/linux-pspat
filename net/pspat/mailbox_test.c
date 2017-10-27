@@ -188,7 +188,8 @@ test7(struct pspat_mailbox *mb, unsigned entries)
 	return 0;
 }
 
-/* Fill, drain and clear many times. */
+/* Fill, drain and clear many times. Always fill/drain until
+ * running out of resources. */
 static int
 test8(struct pspat_mailbox *mb, unsigned entries)
 {
@@ -218,8 +219,10 @@ int main()
 
 	for (i = 0; tests[i] != NULL; i++) {
 		struct pspat_mailbox *mb;
+		char test_name[PSPAT_MB_NAMSZ];
 		assert(entries > 0);
-		mb = pspat_mb_new("test", entries, line_size);
+		snprintf(test_name, sizeof(test_name), "test-%d", i+1);
+		mb = pspat_mb_new(test_name, entries, line_size);
 		assert(mb);
 		EXPECT_TRUE(pspat_mb_empty(mb));
 		printf("Running test #%d ...\n", i+1);
