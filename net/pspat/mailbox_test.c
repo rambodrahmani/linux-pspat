@@ -131,7 +131,7 @@ test4(struct pspat_mailbox *mb, unsigned entries,
 		 unsigned line_size)
 {
 	int n = mb_fill(mb);
-	EXPECT_EQ(n, entries);
+	EXPECT_EQ(n, entries - mb->line_entries);
 	EXPECT_FALSE(pspat_mb_empty(mb));
 	EXPECT_FAIL(pspat_mb_insert(mb, /*value=*/mb-1));
 	EXPECT_FALSE(pspat_mb_empty(mb));
@@ -145,9 +145,9 @@ test5(struct pspat_mailbox *mb, unsigned entries,
 		 unsigned line_size)
 {
 	int n = mb_fill(mb);
-	EXPECT_EQ(n, entries);
+	EXPECT_EQ(n, entries - mb->line_entries);
 	n = mb_drain(mb);
-	EXPECT_EQ(n, entries);
+	EXPECT_EQ(n, entries - mb->line_entries);
 	return 0;
 }
 

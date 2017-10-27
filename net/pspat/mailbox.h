@@ -90,7 +90,8 @@ static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
 	uintptr_t *h = &m->q[m->prod_write & m->entry_mask];
 
 	if (unlikely(m->prod_write == m->prod_check)) {
-		if (*h)
+		/* Leave a cache line empty. */
+		if (m->q[(m->prod_check + m->line_entries) & m->entry_mask])
 			return -ENOBUFS;
 		m->prod_check += m->line_entries;
 		prefetch(h + m->line_entries);
