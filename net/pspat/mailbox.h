@@ -78,6 +78,12 @@ int pspat_mb_init(struct pspat_mailbox *m, const char *name, unsigned long entri
  */
 void pspat_mb_delete(struct pspat_mailbox *m);
 
+static inline void pspat_mb_dump_state(struct pspat_mailbox *m)
+{
+	printk("%s: cc %lu, cr %lu, pw %lu, pc %lu\n", m->name,
+		m->cons_clear, m->cons_read, m->prod_write, m->prod_check);
+}
+
 /**
  * pspat_mb_insert - enqueue a new value
  * @m: the mailbox where to enqueue
@@ -161,11 +167,5 @@ static inline void pspat_mb_clear(struct pspat_mailbox *m)
  * @v: the value to be removed
  */
 void pspat_mb_cancel(struct pspat_mailbox *m, uintptr_t v);
-
-static inline void pspat_mb_dump_state(struct pspat_mailbox *m)
-{
-	printk("cc %lu, cr %lu, pw %lu, pc %lu\n", m->cons_clear, m->cons_read,
-					m->prod_write, m->prod_check);
-}
 
 #endif /* __PSPAT_MAILBOX_H */
