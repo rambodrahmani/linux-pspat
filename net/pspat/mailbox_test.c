@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <errno.h>
 #include <assert.h>
+#include <string.h>
 
 /*
  * Glue code to compile the in-kernel mailbox code in user-space.
@@ -106,7 +107,7 @@ int main()
 	for (i = 0; tests[i] != NULL; i++) {
 		struct pspat_mailbox *mb;
 		assert(line_size > 0 && entries >= line_size);
-		mb = pspat_mb_new(entries, line_size);
+		mb = pspat_mb_new("test", entries, line_size);
 		assert(mb);
 		printf("Running test #%d ...\n", i+1);
 		tests[i](mb, entries, line_size);
