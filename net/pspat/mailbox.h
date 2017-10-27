@@ -23,6 +23,7 @@ struct pspat_mailbox {
 
 	/* shared field, written by both */
 	unsigned long		backpressure;
+	int			dead; /* written by producer */
 
 	/* producer fields */
 	START_NEW_CACHELINE

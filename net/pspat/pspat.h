@@ -29,6 +29,16 @@ struct pspat {
 
 	struct Qdisc		bypass_qdisc;
 
+	/* list of dead mailboxes to be deleted at the first
+	 * safe opportunity
+	 */
+	struct list_head	mb_to_delete;
+	/* number of empty client lists found in the last round
+	 * (after a round with only empty CLs, we can safely
+	 * delete the mbs in the mb_to_delete list)
+	 */
+	int			empty_inqs;
+
 	/* mailboxes between the arbiter and the senders
 	 * (used with PSPAT_XMIT_MODE_DISPATCH) */
 	struct pspat_mailbox	*snd_mbs[1];

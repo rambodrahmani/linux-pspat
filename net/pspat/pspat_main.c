@@ -514,6 +514,7 @@ pspat_create(void)
 		INIT_LIST_HEAD(&arbp->queues[i].mb_to_clear);
 		m = (void *)m + mb_size;
 	}
+	INIT_LIST_HEAD(&arbp->mb_to_delete);
 
 	for (i = 0; i < senders; i++) {
 		char name[PSPAT_MB_NAMSZ];
