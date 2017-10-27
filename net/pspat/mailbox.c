@@ -66,26 +66,3 @@ pspat_mb_delete(struct pspat_mailbox *m)
 #endif
 	kfree(m);
 }
-
-void
-pspat_mb_cancel(struct pspat_mailbox *m, uintptr_t v)
-{
-	unsigned long scan = m->cons_read;
-	
-	for (;;) {
-		uintptr_t v1 = m->q[scan & m->entry_mask];
-
-#ifdef PSPAT_MB_DEBUG
-		printk("PSPAT: mb %s scan %ld cancel %lx: elem %lx\n", m->name, scan, v, v1);
-#endif
-
-		if (__pspat_mb_empty(m, scan, v1))
-			break;
-
-		if ((v1 & ~0x1) == v) {
-			m->q[scan & m->entry_mask] =
-				PSPAT_INVALID | (v & 0x1);
-		}
-		scan++;
-	}
-}

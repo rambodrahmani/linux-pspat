@@ -5,9 +5,6 @@
 
 #include "pspat.h"
 
-/* clients send this value on a mailbox when exiting */
-#define PSPAT_LAST_SKB	(void *)0x4
-
 /* push a new packet to the client queue
  * returns -ENOBUFS if the queue is full
  */
@@ -53,18 +50,18 @@ static void
 pspat_cli_delete(struct pspat *arb, struct pspat_mailbox *m)
 {
 	int i;
-	/* remove any mention of m from all the client lists */
+	/* remove m from all the client lists current-mb pointers */
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
-		pspat_mb_cancel(pq->inq, (uintptr_t)m);
 		if (pq->arb_last_mb == m)
 			pq->arb_last_mb = NULL;
 	}
 	/* possibily remove this mb from the ack list */
 	if (!list_empty(&m->list)) {
-		list_del_init(&m->list);
+		list_del(&m->list);
 	}
-	pspat_mb_delete(m);
+	/* insert into the list of mb to be delete */
+	list_add_tail(&m->list, &arb->mb_to_delete);
 }
 
 static struct pspat_mailbox *
@@ -94,21 +91,23 @@ pspat_arb_get_skb(struct pspat *arb, struct pspat_queue *pq)
 retry:
 	/* first, get the current mailbox for this cpu */
 	m = pspat_arb_get_mb(pq);
-	if (m == NULL)
+	if (m == NULL) {
+		arb->empty_inqs++;
 		return NULL;
+	}
 	/* try to extract an skb from the current mailbox */
 	skb = pspat_mb_extract(m);
 	if (skb) {
-		if (unlikely(skb == PSPAT_LAST_SKB)) {
-			/* special value: the client is gone */
-			pspat_cli_delete(arb, m);
-			goto retry;
-		}
-
 		/* let pspat_arb_ack() see this mailbox */
 		if (list_empty(&m->list)) {
 			list_add_tail(&m->list, &pq->mb_to_clear);
 		}
+	} else  if (unlikely(m->dead)) {
+		/* the client is gone, the arbiter takes
+		 * responsibility in deleting the mb
+		 */
+		pspat_cli_delete(arb, m);
+		goto retry;
 	}
 	return skb;
 }
@@ -170,6 +169,18 @@ pspat_arb_ack(struct pspat_queue *pq)
 	list_for_each_entry_safe(mb_cursor, mb_next, &pq->mb_to_clear, list) {
 		pspat_mb_clear(mb_cursor);
 		list_del_init(&mb_cursor->list);
+	}
+}
+
+/* delete all known dead mailboxes */
+static void
+pspat_arb_delete_dead_mbs(struct pspat *arb)
+{
+	struct pspat_mailbox *mb_cursor, *mb_next;
+
+	list_for_each_entry_safe(mb_cursor, mb_next, &arb->mb_to_delete, list) {
+		list_del(&mb_cursor->list);
+		pspat_mb_delete(mb_cursor);
 	}
 }
 
@@ -260,6 +271,8 @@ pspat_do_arbiter(struct pspat *arb)
 	 * bring in pending packets, arrived between pspat_next_link_idle
 	 * and now (we assume they arrived at last_check)
 	 */
+
+	arb->empty_inqs = 0; /* this may be incremented by pspat_arb_get_skb() below */
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
 		struct sk_buff *to_free = NULL;
@@ -350,6 +363,9 @@ pspat_do_arbiter(struct pspat *arb)
 		if (to_free) {
 			kfree_skb_list(to_free);
 		}
+	}
+	if (arb->empty_inqs == arb->n_queues) {
+		pspat_arb_delete_dead_mbs(arb);
 	}
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
@@ -485,6 +501,8 @@ exit_pspat(void)
 	if (current->pspat_mb == NULL)
 		return;
 
+	current->pspat_mb->dead = 1;
+
 retry:
 	rcu_read_lock();
 	arb = rcu_dereference(pspat_arb);
@@ -495,7 +513,7 @@ retry:
 		 */
 		cpu = get_cpu();
 		pq = arb->queues + cpu;
-		if (pspat_cli_push(pq, PSPAT_LAST_SKB) == 0) {
+		if (pspat_mb_insert(pq->inq, current->pspat_mb) == 0) {
 			current->pspat_mb = NULL;
 		}
 		put_cpu();
