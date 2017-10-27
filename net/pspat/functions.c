@@ -38,8 +38,7 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 	if (pq->cli_last_mb != m) {
 		smp_mb(); /* let the arbiter see the insert above */
 		err = pspat_mb_insert(pq->inq, m);
-		if (err)
-			return err;
+		BUG_ON(err);
 		pq->cli_last_mb = m;
 	}
 
@@ -72,7 +71,10 @@ pspat_arb_get_mb(struct pspat_queue *pq)
 	if (m == NULL || pspat_mb_empty(m)) {
 		m = pspat_mb_extract(pq->inq);
 		if (m) {
-			pspat_mb_clear(pq->inq);
+			if (list_empty(&pq->inq->list)) {
+				list_add_tail(&pq->inq->list,
+						&pq->mb_to_clear);
+			}
 			pq->arb_last_mb = m;
 			/* wait for previous updates in the new mailbox */
 			smp_mb();
@@ -160,7 +162,8 @@ pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
 	return err;
 }
 
-/* zero out the used skbs in the client queue */
+/* Zero out the used skbs in the client mailboxes and the
+ * client lists. */
 static void
 pspat_arb_ack(struct pspat_queue *pq)
 {
