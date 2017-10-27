@@ -50,6 +50,7 @@ static inline int IS_ERR(const void *ptr)
 {
 	return IS_ERR_VALUE((unsigned long)ptr);
 }
+#define BUG_ON(x)	assert(!(x))
 /*
  * End of glue code.
  */
@@ -62,7 +63,31 @@ typedef int (*testfunc_t)(struct pspat_mailbox *mb, unsigned entries,
 #define EXPECT_TRUE(x) assert(!!(x))
 #define EXPECT_FALSE(x) assert(!(x))
 #define EXPECT_OK(x)   assert((x) == 0)
+#define EXPECT_FAIL(x)   assert((x) != 0)
 #define EXPECT_EQ(x, y) assert((x) == (y))
+
+static int
+mb_fill(struct pspat_mailbox *mb)
+{
+	void *v = mb;
+	int n = 0;
+	while (pspat_mb_insert(mb, /*value=*/v) == 0) {
+		n ++;
+		v += 4;
+	}
+	return n;
+}
+
+static int
+mb_drain(struct pspat_mailbox *mb)
+{
+	int n = 0;
+	void *v;
+	while ((v = pspat_mb_extract(mb))) {
+		n ++;
+	}
+	return n;
+}
 
 static int
 test1(struct pspat_mailbox *mb, unsigned entries,
@@ -72,6 +97,7 @@ test1(struct pspat_mailbox *mb, unsigned entries,
 	return 0;
 }
 
+/* Insert into an empty mailbox. */
 static int
 test2(struct pspat_mailbox *mb, unsigned entries,
 		 unsigned line_size)
@@ -82,21 +108,50 @@ test2(struct pspat_mailbox *mb, unsigned entries,
 	return 0;
 }
 
+/* Insert into an empty mailbox, extract and check it is
+ * now empty. */
 static int
 test3(struct pspat_mailbox *mb, unsigned entries,
 		 unsigned line_size)
 {
 	void *v;
 
-	EXPECT_TRUE(pspat_mb_empty(mb));
 	EXPECT_OK(pspat_mb_insert(mb, /*value=*/mb+1));
 	EXPECT_FALSE(pspat_mb_empty(mb));
 	v = pspat_mb_extract(mb);
 	EXPECT_EQ(mb+1, v);
+	EXPECT_TRUE(pspat_mb_empty(mb));
 	return 0;
 }
 
-static testfunc_t tests[] = { test1, test2, test3, NULL };
+/* Check we can fill the mb completely, and after
+ * that we cannot insert anymore. */
+static int
+test4(struct pspat_mailbox *mb, unsigned entries,
+		 unsigned line_size)
+{
+	int n = mb_fill(mb);
+	EXPECT_EQ(n, entries);
+	EXPECT_FALSE(pspat_mb_empty(mb));
+	EXPECT_FAIL(pspat_mb_insert(mb, /*value=*/mb-1));
+	EXPECT_FALSE(pspat_mb_empty(mb));
+	return 0;
+}
+
+/* Fill in and drain, checking that we got back everything
+ * we had inserted. */
+static int
+test5(struct pspat_mailbox *mb, unsigned entries,
+		 unsigned line_size)
+{
+	int n = mb_fill(mb);
+	EXPECT_EQ(n, entries);
+	n = mb_drain(mb);
+	EXPECT_EQ(n, entries);
+	return 0;
+}
+
+static testfunc_t tests[] = { test1, test2, test3, test4, test5, NULL };
 
 int main()
 {
@@ -109,6 +164,7 @@ int main()
 		assert(line_size > 0 && entries >= line_size);
 		mb = pspat_mb_new("test", entries, line_size);
 		assert(mb);
+		EXPECT_TRUE(pspat_mb_empty(mb));
 		printf("Running test #%d ...\n", i+1);
 		tests[i](mb, entries, line_size);
 		printf("... [OK]\n");

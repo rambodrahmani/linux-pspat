@@ -95,6 +95,7 @@ static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
 		m->prod_check += m->line_entries;
 		prefetch(h + m->line_entries);
 	}
+	BUG_ON(((uintptr_t)v) & 0x1);
 	*h = (uintptr_t)v | ((m->prod_write >> m->seqbit_shift) & 0x1);
 	m->prod_write++;
 	return 0;
@@ -165,5 +166,11 @@ static inline void pspat_mb_clear(struct pspat_mailbox *m)
  * @v: the value to be removed
  */
 void pspat_mb_cancel(struct pspat_mailbox *m, uintptr_t v);
+
+static inline void pspat_mb_dump_state(struct pspat_mailbox *m)
+{
+	printk("cc %lu, cr %lu, pw %lu, pc %lu\n", m->cons_clear, m->cons_read,
+					m->prod_write, m->prod_check);
+}
 
 #endif /* __PSPAT_MAILBOX_H */
