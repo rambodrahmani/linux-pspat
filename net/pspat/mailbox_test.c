@@ -138,14 +138,47 @@ test4(struct pspat_mailbox *mb, unsigned entries)
 static int
 test5(struct pspat_mailbox *mb, unsigned entries)
 {
+	int maxn = entries - mb->line_entries;
 	int n = mb_fill(mb);
-	EXPECT_EQ(n, entries - mb->line_entries);
+	EXPECT_EQ(n, maxn);
 	n = mb_drain(mb);
-	EXPECT_EQ(n, entries - mb->line_entries);
+	EXPECT_EQ(n, maxn);
+	EXPECT_TRUE(pspat_mb_empty(mb));
 	return 0;
 }
 
-static testfunc_t tests[] = { test1, test2, test3, test4, test5, NULL };
+/* Fill, drain, and check that we cannot insert anymore
+ * without clearing. */
+static int
+test6(struct pspat_mailbox *mb, unsigned entries)
+{
+	int maxn = entries - mb->line_entries;
+	int n = mb_fill(mb);
+	EXPECT_EQ(n, maxn);
+	n = mb_drain(mb);
+	EXPECT_EQ(n, maxn);
+	EXPECT_FAIL(pspat_mb_insert(mb, /*value=*/mb-4));
+	return 0;
+}
+
+/* Fill, drain and clear. Then check that we can fill again. */
+static int
+test7(struct pspat_mailbox *mb, unsigned entries)
+{
+	int maxn = entries - mb->line_entries;
+	int n = mb_fill(mb);
+	EXPECT_EQ(n, maxn);
+	n = mb_drain(mb);
+	EXPECT_EQ(n, maxn);
+	pspat_mb_clear(mb);
+	EXPECT_TRUE(pspat_mb_empty(mb));
+	n = mb_fill(mb);
+	EXPECT_EQ(n, maxn);
+	return 0;
+}
+
+static testfunc_t tests[] = { test1, test2, test3, test4, test5, test6,
+				test7, NULL };
 
 int main()
 {
