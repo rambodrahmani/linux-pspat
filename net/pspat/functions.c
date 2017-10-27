@@ -204,7 +204,9 @@ pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 		m->backpressure = 1;
 	}
 
-	printk("PSPAT drained mailbox %p [%d skbs]\n", m, dropped);
+	if (unlikely(pspat_debug_xmit)) {
+		printk("PSPAT drained mailbox %s [%d skbs]\n", m->name, dropped);
+	}
 	pspat_arb_backpressure_drop += dropped;
 }
 
