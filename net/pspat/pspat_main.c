@@ -39,7 +39,7 @@ u64 pspat_arb_loop_max_ns = 0;
 u64 pspat_arb_loop_avg_reqs = 0;
 u64 pspat_mailbox_entries = 512;
 u64 pspat_mailbox_line_size = 128;
-u64 *pspat_rounds;
+u64 *pspat_rounds; /* currently unused */
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static int pspat_two = 2;
