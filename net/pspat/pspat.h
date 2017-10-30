@@ -40,10 +40,11 @@ struct pspat {
 	int			empty_inqs;
 
 	/* Statistics to evaluate the cost of an arbiter loop. */
-	u64			num_picos;
-	u64			num_loops;
-	u64			last_ts;
+	unsigned int		num_loops;
+	unsigned int		num_reqs;
 	u64			max_picos;
+	u64			num_picos;
+	u64			last_ts;
 
 	/* mailboxes between the arbiter and the senders
 	 * (used with PSPAT_XMIT_MODE_DISPATCH) */
@@ -84,6 +85,7 @@ extern u64 pspat_snd_deq;
 extern u64 *pspat_rounds;
 extern u64 pspat_arb_loop_avg_ns;
 extern u64 pspat_arb_loop_max_ns;
+extern u64 pspat_arb_loop_avg_reqs;
 extern uint32_t pspat_qdisc_batch_limit;
 extern struct pspat_stats *pspat_stats;
 

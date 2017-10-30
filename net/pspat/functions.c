@@ -248,6 +248,8 @@ pspat_txqs_flush(struct list_head *txqs)
 	}
 }
 
+#define PSPAT_ARB_STATS_LOOPS	0x1000
+
 /* Function implementing the arbiter. */
 int
 pspat_do_arbiter(struct pspat *arb)
@@ -260,6 +262,7 @@ pspat_do_arbiter(struct pspat *arb)
 	struct list_head active_txqs;
 	static u64 last_pspat_rate = 0;
 	static u64 picos_per_byte = 1;
+	unsigned int nreqs = 0;
 
 	if (unlikely(pspat_rate != last_pspat_rate)) {
 		/* Avoid division in the dequeue stage below by
@@ -267,22 +270,6 @@ pspat_do_arbiter(struct pspat *arb)
 		 * Recomputation is done only when needed. */
 		last_pspat_rate = pspat_rate;
 		picos_per_byte = (8 * (NSEC_PER_SEC << 10)) / last_pspat_rate;
-	}
-
-	/* Update statistics on avg/max cost of the arbiter loop. */
-	picos = now - arb->last_ts;
-	arb->last_ts = now;
-	arb->num_picos += picos;
-	arb->num_loops++;
-	if (unlikely(picos > arb->max_picos)) {
-		arb->max_picos = picos;
-	}
-	if (unlikely(arb->num_loops & 0x1000)) {
-		pspat_arb_loop_avg_ns = (arb->num_picos / 0x1000) >> 10;
-		pspat_arb_loop_max_ns = arb->max_picos >> 10;
-		arb->num_loops = 0;
-		arb->num_picos = 0;
-		arb->max_picos = 0;
 	}
 
 	rcu_read_lock_bh();
@@ -306,6 +293,7 @@ pspat_do_arbiter(struct pspat *arb)
 		while ( (skb = pspat_arb_get_skb(arb, pq)) ) {
 			int rc;
 
+			++nreqs;
 			if (!pspat_tc_bypass) {
 				/*
 				 * the client chose the txq before sending
@@ -394,7 +382,7 @@ pspat_do_arbiter(struct pspat *arb)
 	INIT_LIST_HEAD(&active_txqs);
 	for (q = arb->qdiscs; q; q = q->pspat_next) {
 		u64 next_link_idle = q->pspat_next_link_idle;
-		int ndeq = 0;
+		unsigned int ndeq = 0;
 
 		while (next_link_idle <= now &&
 			ndeq < q->pspat_batch_limit)
@@ -451,6 +439,27 @@ pspat_do_arbiter(struct pspat *arb)
 	}
 
 	rcu_read_unlock_bh();
+
+	/* Update statistics on avg/max cost of the arbiter loop and
+	 * per-loop client mailbox processing. */
+	picos = now - arb->last_ts;
+	arb->last_ts = now;
+	arb->num_picos += picos;
+	arb->num_reqs += nreqs;
+	arb->num_loops++;
+	if (unlikely(picos > arb->max_picos)) {
+		arb->max_picos = picos;
+	}
+	if (unlikely(arb->num_loops & PSPAT_ARB_STATS_LOOPS)) {
+		pspat_arb_loop_avg_ns =
+			(arb->num_picos / PSPAT_ARB_STATS_LOOPS) >> 10;
+		pspat_arb_loop_max_ns = arb->max_picos >> 10;
+		pspat_arb_loop_avg_reqs = arb->num_reqs / PSPAT_ARB_STATS_LOOPS;
+		arb->num_loops = 0;
+		arb->num_picos = 0;
+		arb->max_picos = 0;
+		arb->num_reqs = 0;
+	}
 
 	return 0;
 }

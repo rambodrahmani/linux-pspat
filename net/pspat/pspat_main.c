@@ -36,6 +36,7 @@ u64 pspat_arb_dispatch_drop = 0;
 u64 pspat_snd_deq = 0;
 u64 pspat_arb_loop_avg_ns = 0;
 u64 pspat_arb_loop_max_ns = 0;
+u64 pspat_arb_loop_avg_reqs = 0;
 u64 pspat_mailbox_entries = 512;
 u64 pspat_mailbox_line_size = 128;
 u64 *pspat_rounds;
@@ -225,6 +226,15 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
 		.data		= &pspat_arb_loop_max_ns,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "arb_loop_avg_reqs",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_arb_loop_avg_reqs,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
 		.extra2		= &pspat_ulongmax,
