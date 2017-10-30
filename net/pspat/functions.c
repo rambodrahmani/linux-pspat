@@ -277,11 +277,12 @@ pspat_do_arbiter(struct pspat *arb)
 	if (unlikely(picos > arb->max_picos)) {
 		arb->max_picos = picos;
 	}
-	if (unlikely(arb->num_loops & 0x100)) {
-		pspat_arb_loop_avg_ns = (arb->num_picos / 0x100) >> 10;
+	if (unlikely(arb->num_loops & 0x1000)) {
+		pspat_arb_loop_avg_ns = (arb->num_picos / 0x1000) >> 10;
 		pspat_arb_loop_max_ns = arb->max_picos >> 10;
 		arb->num_loops = 0;
 		arb->num_picos = 0;
+		arb->max_picos = 0;
 	}
 
 	rcu_read_lock_bh();
