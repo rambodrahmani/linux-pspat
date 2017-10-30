@@ -253,13 +253,13 @@ int
 pspat_do_arbiter(struct pspat *arb)
 {
 	int i;
-	u64 now = ktime_get_ns() << 10;
+	u64 now = ktime_get_ns() << 10, picos;
 	struct Qdisc *q = &arb->bypass_qdisc;
 	/* list of all netdev_queue on which we are actively
 	 * transmitting */
 	struct list_head active_txqs;
-	static uint64_t last_pspat_rate = 0;
-	static uint64_t picos_per_byte = 1;
+	static u64 last_pspat_rate = 0;
+	static u64 picos_per_byte = 1;
 
 	if (unlikely(pspat_rate != last_pspat_rate)) {
 		/* Avoid division in the dequeue stage below by
@@ -267,6 +267,21 @@ pspat_do_arbiter(struct pspat *arb)
 		 * Recomputation is done only when needed. */
 		last_pspat_rate = pspat_rate;
 		picos_per_byte = (8 * (NSEC_PER_SEC << 10)) / last_pspat_rate;
+	}
+
+	/* Update statistics on avg/max cost of the arbiter loop. */
+	picos = now - arb->last_ts;
+	arb->last_ts = now;
+	arb->num_picos += picos;
+	arb->num_loops++;
+	if (unlikely(picos > arb->max_picos)) {
+		arb->max_picos = picos;
+	}
+	if (unlikely(arb->num_loops & 0x100)) {
+		pspat_arb_loop_avg_ns = (arb->num_picos / 0x100) >> 10;
+		pspat_arb_loop_max_ns = arb->max_picos >> 10;
+		arb->num_loops = 0;
+		arb->num_picos = 0;
 	}
 
 	rcu_read_lock_bh();

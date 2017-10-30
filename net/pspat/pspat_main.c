@@ -34,6 +34,8 @@ u64 pspat_arb_backpressure_drop = 0;
 u64 pspat_arb_tc_deq = 0;
 u64 pspat_arb_dispatch_drop = 0;
 u64 pspat_snd_deq = 0;
+u64 pspat_arb_loop_avg_ns = 0;
+u64 pspat_arb_loop_max_ns = 0;
 u64 pspat_mailbox_entries = 512;
 u64 pspat_mailbox_line_size = 128;
 u64 *pspat_rounds;
@@ -210,6 +212,24 @@ static struct ctl_table pspat_static_ctl[] = {
 		.extra2		= &pspat_ulongmax,
 	},
 	{
+		.procname	= "arb_loop_avg_ns",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_arb_loop_avg_ns,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "arb_loop_max_ns",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_arb_loop_max_ns,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
 		.procname	= "mailbox_entries",
 		.maxlen		= sizeof(u64),
 		.mode		= 0644,
@@ -370,6 +390,10 @@ arb_worker_func(void *data)
 				mutex_unlock(&pspat_glock);
 				arb_registered = true;
 				printk("PSPAT arbiter registered\n");
+				arb->last_ts = ktime_get_ns() << 10;
+				arb->num_loops = 0;
+				arb->num_picos = 0;
+				arb->max_picos = 0;
 			}
 
 			pspat_do_arbiter(arb);
