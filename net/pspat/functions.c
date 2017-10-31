@@ -232,8 +232,21 @@ pspat_txq_flush(struct netdev_queue *txq)
 	HARD_TX_UNLOCK(dev, txq);
 
 	if (!dev_xmit_complete(ret)) {
-		// XXX we should requeue into the qdisc
-		kfree_skb_list(skb);
+		/* Here we should requeue into the qdisc (TODO).
+		 * For the moment being we drop, but we can't
+		 * call kfree_skb_list(), because this function
+		 * does not unlink the skbuffs from the list.
+		 * Unlinking is important in case the refcount
+		 * of some of the skbuffs does not go to zero
+		 * here, that would mean possible dangling
+		 * pointers. */
+		while (skb) {
+			struct sk_buff *next = skb->next;
+
+			skb->next = NULL; /* unlink */
+			kfree_skb(skb);
+			skb = next;
+		}
 	}
 }
 
