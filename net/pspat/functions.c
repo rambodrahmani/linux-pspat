@@ -329,6 +329,14 @@ pspat_do_arbiter(struct pspat *arb)
 				if (q->gso_skb) {
 					kfree_skb(q->gso_skb);
 					q->gso_skb = NULL;
+					qdisc_qstats_backlog_dec(q, skb);
+					q->q.qlen--;
+					j ++;
+				}
+				if (q->skb_bad_txq) {
+					kfree_skb(q->skb_bad_txq);
+					q->skb_bad_txq = NULL;
+					qdisc_qstats_backlog_dec(q, skb);
 					q->q.qlen--;
 					j ++;
 				}
@@ -387,17 +395,18 @@ pspat_do_arbiter(struct pspat *arb)
 		while (next_link_idle <= now &&
 			ndeq < q->pspat_batch_limit)
 		{
-			struct sk_buff *skb = q->dequeue(q);
-			// XXX things to do when dequeing:
-			// - q->gso_skb may contain a "requeued"
-			//   packet which should go out first
-			//   (without calling ->dequeue())
-			// - skb that come out of ->dequeue() must
-			//   be "validated" (for segmentation,
-			//   checksumming and so on). I think
-			//   validation may be done in parallel
-			//   in the sender threads.
-			//   (see validate_xmit_skb_list())
+			struct sk_buff *skb = q->gso_skb;
+
+			if (unlikely(skb)) {
+				/* q->gso_skb may contain a "requeued"
+				   packet which should go out first
+				   (without calling ->dequeue()) */
+				q->gso_skb = NULL;
+				qdisc_qstats_backlog_dec(q, skb);
+				q->q.qlen--;
+			} else {
+				skb = q->dequeue(q);
+			}
 
 			if (skb == NULL)
 				break;
