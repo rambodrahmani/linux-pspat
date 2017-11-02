@@ -1,5 +1,6 @@
 CC=gcc
 CFLAGS=-Wall
+LDFLAGS=-lm
 
 all: mailbox_test
 

@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <string.h>
+#include <math.h>
 
 /*
  * Glue code to compile the in-kernel mailbox code in user-space.
@@ -208,8 +209,94 @@ test8(struct pspat_mailbox *mb, unsigned entries)
 	return 0;
 }
 
+/* Mixed operations. */
+static int
+test9(struct pspat_mailbox *mb, unsigned entries)
+{
+	int maxn = entries - mb->line_entries;
+	int n;
+
+	n = mb_fill_limit(mb, maxn/5); /* +1/5 */
+	EXPECT_EQ(n, maxn/5);
+	n = mb_drain_limit(mb, maxn/11);  /* -1/11 */
+	EXPECT_EQ(n, maxn/11);
+	n = mb_drain_limit(mb, maxn/12); /* -1/12 */
+	EXPECT_EQ(n, maxn/12);
+	n = mb_drain_limit(mb, 1); /* -1 */
+	EXPECT_EQ(n, 1);
+	n = mb_fill_limit(mb, maxn/7); /* +1/7 */
+	EXPECT_EQ(n, maxn/7);
+	n = mb_drain_limit(mb, 2); /* -2 */
+	EXPECT_EQ(n, 2);
+	n = mb_drain(mb);
+	EXPECT_EQ(n, maxn/5+maxn/7-maxn/11-maxn/12-1-2);
+	EXPECT_TRUE(pspat_mb_empty(mb));
+
+	return 0;
+}
+
+/* Slowly fill the mailbox alternating insertion and extractions.
+ * Check that we get the expected number of iterations. */
+static int
+test10(struct pspat_mailbox *mb, unsigned entries)
+{
+	int maxn = entries - mb->line_entries;
+	int arbitrary_inc = 5*maxn/43;
+	int arbitrary_dec = 4*maxn/43;
+	int expected_iterations;
+	int n_iterations;
+	int track;
+
+	assert(arbitrary_inc != arbitrary_dec);
+	expected_iterations = (int) (ceil((double)(maxn-arbitrary_inc) /
+				(double)(arbitrary_inc-arbitrary_dec)));
+
+	EXPECT_TRUE(pspat_mb_empty(mb));
+	for (track = 0, n_iterations = 0; track + arbitrary_inc <= maxn;
+			n_iterations ++) {
+		int n = mb_fill_limit(mb, arbitrary_inc);
+		EXPECT_EQ(n, arbitrary_inc);
+		track += n;
+		n = mb_drain_limit(mb, arbitrary_dec);
+		EXPECT_EQ(n, arbitrary_dec);
+		track -= n;
+		EXPECT_TRUE(track >= 0);
+		pspat_mb_clear(mb);
+	}
+	EXPECT_EQ(n_iterations, expected_iterations);
+
+	return 0;
+}
+
+/* Insert and extract items one at a time, so many times to
+ * use the ring multiple times. */
+static int
+test11(struct pspat_mailbox *mb, unsigned entries)
+{
+	int maxn = entries - mb->line_entries;
+	int arbitrary_num_cycles = maxn * 17;
+	int i;
+
+	for (i = 0; i < arbitrary_num_cycles; i ++) {
+		/* Insert 1. */
+		int n = mb_fill_limit(mb, 1);
+		EXPECT_EQ(n, 1);
+		/* Drain at least 2, checking that we get one. */
+		n = mb_drain_limit(mb, 2);
+		EXPECT_EQ(n, 1);
+		if ((i % maxn == maxn/3) || (i % maxn == maxn*2/3)) {
+			/* Clear once every maxn items, in the
+			 * middle of processing, making sure we
+			 * never run out of slots. */
+			pspat_mb_clear(mb);
+		}
+	}
+
+	return 0;
+}
+
 static testfunc_t tests[] = { test1, test2, test3, test4, test5, test6,
-				test7, test8, NULL };
+				test7, test8, test9, test10, test11, NULL };
 
 int main()
 {
