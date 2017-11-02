@@ -409,7 +409,7 @@ pspat_do_arbiter(struct pspat *arb)
 		unsigned int ndeq = 0;
 
 		while (next_link_idle <= now &&
-			ndeq < q->pspat_batch_limit)
+			ndeq < pspat_qdisc_batch_limit)
 		{
 			struct sk_buff *skb = q->gso_skb;
 
@@ -453,7 +453,8 @@ pspat_do_arbiter(struct pspat *arb)
                 /* If the traffic on this root qdisc is not enough to fill
                  * the link bandwidth, we need to move next_link_idle
                  * forward, in order to avoid accumulating credits. */
-                if (next_link_idle <= now && ndeq < q->pspat_batch_limit) {
+                if (next_link_idle <= now &&
+			ndeq < pspat_qdisc_batch_limit) {
                     next_link_idle = now;
                 }
 		q->pspat_next_link_idle = next_link_idle;
