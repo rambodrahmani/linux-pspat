@@ -220,6 +220,7 @@ pspat_txq_flush(struct netdev_queue *txq)
 	struct sk_buff *skb = txq->pspat_markq_head;
 	int ret = NETDEV_TX_BUSY;
 	struct sk_buff *last;
+	unsigned int nrequeued;
 
 	/* Validate all the skbs in the markq. Some (or all) the skbs may be
 	 * dropped. */
@@ -249,11 +250,14 @@ pspat_txq_flush(struct netdev_queue *txq)
 	 * pointers.
 	 * In any case, here we just need to look for the end of the list, to
 	 * set the tail pointer. */
+	nrequeued = 0;
 	do {
 		last = skb;
 		skb = skb->next;
+		++nrequeued;
 	} while (skb);
 	txq->pspat_markq_tail = last;
+	pspat_arb_xmit_requeue += nrequeued;
 
 	return 1;
 }
