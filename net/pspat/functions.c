@@ -232,6 +232,7 @@ pspat_txq_flush(struct netdev_queue *txq)
 	HARD_TX_UNLOCK(dev, txq);
 
 	if (!dev_xmit_complete(ret)) {
+		unsigned int ndropped = 0;
 		/* Here we should requeue into the qdisc (TODO).
 		 * For the moment being we drop, but we can't
 		 * call kfree_skb_list(), because this function
@@ -246,7 +247,9 @@ pspat_txq_flush(struct netdev_queue *txq)
 			skb->next = NULL; /* unlink */
 			kfree_skb(skb);
 			skb = next;
+			++ndropped;
 		}
+		pspat_arb_xmit_drop += ndropped;
 	}
 }
 

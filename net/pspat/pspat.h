@@ -81,6 +81,7 @@ extern u64 pspat_arb_tc_enq_drop;
 extern u64 pspat_arb_backpressure_drop;
 extern u64 pspat_arb_tc_deq;
 extern u64 pspat_arb_dispatch_drop;
+extern u64 pspat_arb_xmit_drop;
 extern u64 pspat_snd_deq;
 extern u64 *pspat_rounds;
 extern u64 pspat_arb_loop_avg_ns;

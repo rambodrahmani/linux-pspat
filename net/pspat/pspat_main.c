@@ -33,6 +33,7 @@ u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_backpressure_drop = 0;
 u64 pspat_arb_tc_deq = 0;
 u64 pspat_arb_dispatch_drop = 0;
+u64 pspat_arb_xmit_drop = 0;
 u64 pspat_snd_deq = 0;
 u64 pspat_arb_loop_avg_ns = 0;
 u64 pspat_arb_loop_max_ns = 0;
@@ -199,6 +200,15 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
 		.data		= &pspat_arb_dispatch_drop,
+		.proc_handler	= &proc_doulongvec_minmax,
+		.extra1		= &pspat_ulongzero,
+		.extra2		= &pspat_ulongmax,
+	},
+	{
+		.procname	= "arb_xmit_drop",
+		.maxlen		= sizeof(u64),
+		.mode		= 0444,
+		.data		= &pspat_arb_xmit_drop,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
 		.extra2		= &pspat_ulongmax,
