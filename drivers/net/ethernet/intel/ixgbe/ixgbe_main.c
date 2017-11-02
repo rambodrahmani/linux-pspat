@@ -7704,7 +7704,7 @@ static void ixgbe_remove(struct pci_dev *pdev)
 	struct net_device *netdev = adapter->netdev;
 
 #ifdef DEV_NETMAP
-	netmap_detach(netdev);
+	ixgbe_netmap_detach(adapter);
 #endif /* DEV_NETMAP */
 
 #ifdef CONFIG_DEBUG_FS
