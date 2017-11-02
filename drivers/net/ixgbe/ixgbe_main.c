@@ -6045,7 +6045,7 @@ static void __devexit ixgbe_remove(struct pci_dev *pdev)
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
 
 #ifdef DEV_NETMAP
-	netmap_detach(netdev);
+	ixgbe_netmap_detach(adapter);
 #endif /* DEV_NETMAP */
 
 	set_bit(__IXGBE_DOWN, &adapter->state);
