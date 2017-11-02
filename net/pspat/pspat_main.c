@@ -559,6 +559,7 @@ pspat_create(void)
 		m = (void *)m + mb_size;
 	}
 	INIT_LIST_HEAD(&arbp->mb_to_delete);
+	INIT_LIST_HEAD(&arbp->active_txqs);
 
 	for (i = 0; i < senders; i++) {
 		char name[PSPAT_MB_NAMSZ];

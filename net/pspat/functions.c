@@ -116,7 +116,7 @@ retry:
 
 /* mark skb as eligible for transmission on a netdev_queue, and
  * make sure this queue is part of the list of active queues */
-static void
+static inline void
 pspat_mark(struct list_head *active_queues, struct sk_buff *skb)
 {
 	struct netdev_queue *txq = skb_get_tx_queue(skb->dev, skb);
@@ -210,47 +210,52 @@ pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 	pspat_arb_backpressure_drop += dropped;
 }
 
-static inline void
+/* Flush the markq associated to a device transmit queue. Returns 0 if all the
+ * packets in the markq were transmitted. A non-zero return code means that the
+ * markq has not been emptied. */
+static inline int
 pspat_txq_flush(struct netdev_queue *txq)
 {
 	struct net_device *dev = txq->dev;
 	struct sk_buff *skb = txq->pspat_markq_head;
 	int ret = NETDEV_TX_BUSY;
-
-	/* reset markq pointers */
-	txq->pspat_markq_head = txq->pspat_markq_tail = NULL;
+	struct sk_buff *last;
 
 	/* Validate all the skbs in the markq. Some (or all) the skbs may be
 	 * dropped. */
 	skb = validate_xmit_skb_list(skb, dev);
 
 	HARD_TX_LOCK(dev, txq, smp_processor_id());
-	if (!netif_xmit_frozen_or_stopped(txq))
+	if (!netif_xmit_frozen_or_stopped(txq)) {
 		skb = dev_hard_start_xmit(skb, dev, txq, &ret);
-	else if (unlikely(pspat_debug_xmit))
-		printk("txq stopped, drop %p\n", skb);
+	}
 	HARD_TX_UNLOCK(dev, txq);
 
-	if (!dev_xmit_complete(ret)) {
-		unsigned int ndropped = 0;
-		/* Here we should requeue into the qdisc (TODO).
-		 * For the moment being we drop, but we can't
-		 * call kfree_skb_list(), because this function
-		 * does not unlink the skbuffs from the list.
-		 * Unlinking is important in case the refcount
-		 * of some of the skbuffs does not go to zero
-		 * here, that would mean possible dangling
-		 * pointers. */
-		while (skb) {
-			struct sk_buff *next = skb->next;
-
-			skb->next = NULL; /* unlink */
-			kfree_skb(skb);
-			skb = next;
-			++ndropped;
-		}
-		pspat_arb_xmit_drop += ndropped;
+	/* The skb pointer here is NULL if all packets were transmitted.
+	 * Otherwise it points to a list of packets to be transmitted. */
+	txq->pspat_markq_head = skb;
+	if (!skb) {
+		/* All packets were transmitted, we can just reset
+		 * the markq. */
+		BUG_ON(!dev_xmit_complete(ret));
+		txq->pspat_markq_tail = NULL;
+		return 0;
 	}
+
+	/* Note: even if we wanted to drop, we couldn't call kfree_skb_list(),
+	 * because this function does not unlink the skbuffs from the list.
+	 * Unlinking is important in case the refcount of some of the skbuffs
+	 * would not go to zero here, that would mean possible dangling
+	 * pointers.
+	 * In any case, here we just need to look for the end of the list, to
+	 * set the tail pointer. */
+	do {
+		last = skb;
+		skb = skb->next;
+	} while (skb);
+	txq->pspat_markq_tail = last;
+
+	return 1;
 }
 
 static void
@@ -259,8 +264,9 @@ pspat_txqs_flush(struct list_head *txqs)
 	struct netdev_queue *txq, *txq_next;
 
 	list_for_each_entry_safe(txq, txq_next, txqs, pspat_active) {
-		pspat_txq_flush(txq);
-		INIT_LIST_HEAD(&txq->pspat_active);
+		if (pspat_txq_flush(txq) == 0) {
+			list_del_init(&txq->pspat_active);
+		}
 	}
 }
 
@@ -273,9 +279,6 @@ pspat_do_arbiter(struct pspat *arb)
 	int i;
 	u64 now = ktime_get_ns() << 10, picos;
 	struct Qdisc *q = &arb->bypass_qdisc;
-	/* list of all netdev_queue on which we are actively
-	 * transmitting */
-	struct list_head active_txqs;
 	static u64 last_pspat_rate = 0;
 	static u64 picos_per_byte = 1;
 	unsigned int nreqs = 0;
@@ -403,7 +406,6 @@ pspat_do_arbiter(struct pspat *arb)
 		struct pspat_queue *pq = arb->queues + i;
 		pspat_arb_ack(pq);     /* to clients */
 	}
-	INIT_LIST_HEAD(&active_txqs);
 	for (q = arb->qdiscs; q; q = q->pspat_next) {
 		u64 next_link_idle = q->pspat_next_link_idle;
 		unsigned int ndeq = 0;
@@ -438,7 +440,7 @@ pspat_do_arbiter(struct pspat *arb)
 
 			switch (pspat_xmit_mode) {
 			case PSPAT_XMIT_MODE_ARB:
-				pspat_mark(&active_txqs, skb);
+				pspat_mark(&arb->active_txqs, skb);
 				break;
 			case PSPAT_XMIT_MODE_DISPATCH:
 				pspat_arb_dispatch(arb, skb);
@@ -461,7 +463,7 @@ pspat_do_arbiter(struct pspat *arb)
 	}
 
 	if (pspat_xmit_mode == PSPAT_XMIT_MODE_ARB) {
-		pspat_txqs_flush(&active_txqs);
+		pspat_txqs_flush(&arb->active_txqs);
 	}
 
 	rcu_read_unlock_bh();

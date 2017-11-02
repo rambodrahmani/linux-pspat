@@ -46,6 +46,10 @@ struct pspat {
 	u64			num_picos;
 	u64			last_ts;
 
+	/* list of all netdev_queue on which we are actively
+	 * transmitting */
+	struct list_head	active_txqs;
+
 	/* mailboxes between the arbiter and the senders
 	 * (used with PSPAT_XMIT_MODE_DISPATCH) */
 	struct pspat_mailbox	*snd_mbs[1];
