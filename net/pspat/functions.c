@@ -218,8 +218,6 @@ pspat_txq_flush(struct netdev_queue *txq)
 {
 	struct net_device *dev = txq->dev;
 	int ret = NETDEV_TX_BUSY;
-	struct sk_buff *last;
-	unsigned int nrequeued;
 	struct sk_buff *skb;
 
 	/* Validate all the skbs in the markq. Some (or all) the skbs may be
@@ -254,18 +252,6 @@ pspat_txq_flush(struct netdev_queue *txq)
 		txq->pspat_validq_tail = NULL;
 		return 0;
 	}
-
-	nrequeued = 0;
-	do {
-		last = skb;
-		skb = skb->next;
-		++nrequeued;
-	} while (skb);
-	pspat_arb_xmit_requeue += nrequeued;
-	if (txq->pspat_validq_tail != last) {
-		printk("LAST %p != VALIDQ TAIL %p --> NO!\n", txq->pspat_validq_tail, last);
-	}
-	txq->pspat_validq_tail = last;
 
 	return 1;
 }
