@@ -3573,7 +3573,7 @@ static void __devexit ixgbevf_remove(struct pci_dev *pdev)
 
 
 #ifdef DEV_NETMAP
-	netmap_detach(netdev);
+	ixgbe_netmap_detach(adapter);
 #endif /* DEV_NETMAP */
 
 	set_bit(__IXGBEVF_DOWN, &adapter->state);
