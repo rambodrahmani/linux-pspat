@@ -4801,11 +4801,11 @@ static void ixgbevf_remove(struct pci_dev *pdev)
 	if (!netdev)
 		return;
 
-#ifdef DEV_NETMAP
-	netmap_detach(netdev);
-#endif /* DEV_NETMAP */
-
 	adapter = netdev_priv(netdev);
+
+#ifdef DEV_NETMAP
+	ixgbe_netmap_detach(adapter);
+#endif /* DEV_NETMAP */
 
 	set_bit(__IXGBEVF_REMOVING, &adapter->state);
 	cancel_work_sync(&adapter->service_task);
