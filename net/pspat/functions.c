@@ -255,13 +255,6 @@ pspat_txq_flush(struct netdev_queue *txq)
 		return 0;
 	}
 
-	/* Note: even if we wanted to drop, we couldn't call kfree_skb_list(),
-	 * because this function does not unlink the skbuffs from the list.
-	 * Unlinking is important in case the refcount of some of the skbuffs
-	 * would not go to zero here, that would mean possible dangling
-	 * pointers.
-	 * In any case, here we just need to look for the end of the list, to
-	 * set the validq tail pointer. */
 	nrequeued = 0;
 	do {
 		last = skb;
@@ -514,28 +507,56 @@ pspat_do_arbiter(struct pspat *arb)
 void
 pspat_shutdown(struct pspat *arb)
 {
+	struct netdev_queue *txq, *txq_next;
 	struct Qdisc *q, **_q;
+	int n;
 	int i;
 
-	/* We need to drain all the queues to discover and free up
-	 * all dead mailboxes
-	 */
-	for (i = 0; i < arb->n_queues; i++) {
+	/* We need to drain all the client lists and client mailboxes
+	 * to discover and free up all dead client mailboxes. */
+	for (i = 0, n = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
 		struct sk_buff *skb;
 
 		while ( (skb = pspat_arb_get_skb(arb, pq)) ) {
 			kfree_skb(skb);
+			n ++;
 		}
 	}
+	printk("%s: CMs drained, found %d skbs\n", __func__, n);
 
-	for (_q = &arb->qdiscs, q = *_q; q; _q = &q->pspat_next, q = *_q) {
+	/* Also drain the validq of all the active tx queues. */
+	n = 0;
+	list_for_each_entry_safe(txq, txq_next, &arb->active_txqs, pspat_active) {
+		/* We can't call kfree_skb_list(), because this function does
+		 * not unlink the skbuffs from the list.
+		 * Unlinking is important in case the refcount of some of the
+		 * skbuffs does not go to zero here, that would mean possible
+		 * dangling pointers. */
+		while (txq->pspat_validq_head != NULL) {
+			struct sk_buff *next = txq->pspat_validq_head->next;
+			txq->pspat_validq_head->next = NULL;
+			kfree_skb(txq->pspat_validq_head);
+			txq->pspat_validq_head = next;
+			n ++;
+		}
+		txq->pspat_validq_tail = NULL;
+		list_del_init(&txq->pspat_active);
+		BUG_ON(txq->pspat_markq_head != NULL ||
+			txq->pspat_markq_tail != NULL);
+	}
+	printk("%s: validq lists drained, found %d skbs\n", __func__, n);
+
+	/* Return all the stolen qdiscs. */
+	for (n = 0, _q = &arb->qdiscs, q = *_q; q; _q = &q->pspat_next, q = *_q) {
 		spin_lock(qdisc_lock(q));
 		qdisc_run_end(q);
 		spin_unlock(qdisc_lock(q));
 		q->pspat_owned = 0;
 		*_q = NULL;
+		n ++;
 	}
+	printk("%s: %d qdiscs released\n", __func__, n);
 }
 
 int
