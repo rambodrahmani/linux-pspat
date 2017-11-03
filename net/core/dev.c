@@ -3091,9 +3091,10 @@ out_null:
 	return NULL;
 }
 
-struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *dev)
+struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *dev,
+				       struct sk_buff **ptail)
 {
-	struct sk_buff *next, *head = NULL, *tail;
+	struct sk_buff *next, *head = NULL, *tail = NULL;
 
 	for (; skb != NULL; skb = next) {
 		next = skb->next;
@@ -3115,6 +3116,8 @@ struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *d
 		 */
 		tail = skb->prev;
 	}
+	if (ptail)
+		*ptail = tail;
 	return head;
 }
 EXPORT_SYMBOL_GPL(validate_xmit_skb_list);
@@ -7422,6 +7425,8 @@ static void netdev_init_one_queue(struct net_device *dev,
 #ifdef CONFIG_PSPAT
 	queue->pspat_markq_head = NULL;
 	queue->pspat_markq_tail = NULL;
+	queue->pspat_validq_head = NULL;
+	queue->pspat_validq_tail = NULL;
 	INIT_LIST_HEAD(&queue->pspat_active);
 #endif
 }

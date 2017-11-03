@@ -257,7 +257,7 @@ static int packet_direct_xmit(struct sk_buff *skb)
 		     !netif_carrier_ok(dev)))
 		goto drop;
 
-	skb = validate_xmit_skb_list(skb, dev);
+	skb = validate_xmit_skb_list(skb, dev, NULL);
 	if (skb != orig_skb)
 		goto drop;
 

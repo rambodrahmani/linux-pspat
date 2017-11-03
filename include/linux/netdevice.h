@@ -585,6 +585,8 @@ struct netdev_queue {
 #ifdef CONFIG_PSPAT
 	struct sk_buff	       *pspat_markq_head;
 	struct sk_buff	       *pspat_markq_tail;
+	struct sk_buff	       *pspat_validq_head;
+	struct sk_buff	       *pspat_validq_tail;
 	struct list_head	pspat_active;
 #endif
 } ____cacheline_aligned_in_smp;
@@ -3299,7 +3301,9 @@ int dev_get_phys_port_id(struct net_device *dev,
 int dev_get_phys_port_name(struct net_device *dev,
 			   char *name, size_t len);
 int dev_change_proto_down(struct net_device *dev, bool proto_down);
-struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *dev);
+struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb,
+				       struct net_device *dev,
+				       struct sk_buff **ptail);
 struct sk_buff *dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 				    struct netdev_queue *txq, int *ret);
 

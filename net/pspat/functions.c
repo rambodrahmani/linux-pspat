@@ -217,14 +217,26 @@ static inline int
 pspat_txq_flush(struct netdev_queue *txq)
 {
 	struct net_device *dev = txq->dev;
-	struct sk_buff *skb = txq->pspat_markq_head;
 	int ret = NETDEV_TX_BUSY;
 	struct sk_buff *last;
 	unsigned int nrequeued;
+	struct sk_buff *skb;
 
 	/* Validate all the skbs in the markq. Some (or all) the skbs may be
-	 * dropped. */
-	skb = validate_xmit_skb_list(skb, dev);
+	 * dropped. The function may modify the markq head/tail pointers. */
+	txq->pspat_markq_head = validate_xmit_skb_list(txq->pspat_markq_head,
+						dev, &txq->pspat_markq_tail);
+	/* Append the markq to the validq (handling the case where the validq
+	 * was empty and/or the markq is empty) and reset the markq. */
+	if (txq->pspat_validq_head == NULL) {
+		txq->pspat_validq_head = txq->pspat_markq_head;
+		txq->pspat_validq_tail = txq->pspat_markq_tail;
+	} else if (txq->pspat_markq_head) {
+		txq->pspat_validq_tail->next = txq->pspat_markq_head;
+		txq->pspat_validq_tail = txq->pspat_markq_tail;
+	}
+	txq->pspat_markq_head = txq->pspat_markq_tail = NULL;
+	skb = txq->pspat_validq_head;
 
 	HARD_TX_LOCK(dev, txq, smp_processor_id());
 	if (!netif_xmit_frozen_or_stopped(txq)) {
@@ -234,12 +246,12 @@ pspat_txq_flush(struct netdev_queue *txq)
 
 	/* The skb pointer here is NULL if all packets were transmitted.
 	 * Otherwise it points to a list of packets to be transmitted. */
-	txq->pspat_markq_head = skb;
+	txq->pspat_validq_head = skb;
 	if (!skb) {
 		/* All packets were transmitted, we can just reset
-		 * the markq. */
+		 * the validq tail (head was reset above). */
 		BUG_ON(!dev_xmit_complete(ret));
-		txq->pspat_markq_tail = NULL;
+		txq->pspat_validq_tail = NULL;
 		return 0;
 	}
 
@@ -249,15 +261,18 @@ pspat_txq_flush(struct netdev_queue *txq)
 	 * would not go to zero here, that would mean possible dangling
 	 * pointers.
 	 * In any case, here we just need to look for the end of the list, to
-	 * set the tail pointer. */
+	 * set the validq tail pointer. */
 	nrequeued = 0;
 	do {
 		last = skb;
 		skb = skb->next;
 		++nrequeued;
 	} while (skb);
-	txq->pspat_markq_tail = last;
 	pspat_arb_xmit_requeue += nrequeued;
+	if (txq->pspat_validq_tail != last) {
+		printk("LAST %p != VALIDQ TAIL %p --> NO!\n", txq->pspat_validq_tail, last);
+	}
+	txq->pspat_validq_tail = last;
 
 	return 1;
 }
