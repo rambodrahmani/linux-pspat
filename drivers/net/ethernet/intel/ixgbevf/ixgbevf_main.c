@@ -3688,7 +3688,7 @@ static void ixgbevf_remove(struct pci_dev *pdev)
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 
 #ifdef DEV_NETMAP
-	netmap_detach(netdev);
+	ixgbe_netmap_detach(adapter);
 #endif /* DEV_NETMAP */
 
 	set_bit(__IXGBEVF_REMOVING, &adapter->state);
