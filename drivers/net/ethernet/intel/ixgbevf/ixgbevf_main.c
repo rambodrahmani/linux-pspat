@@ -4154,7 +4154,7 @@ static void ixgbevf_remove(struct pci_dev *pdev)
 		return;
 
 #ifdef DEV_NETMAP
-	netmap_detach(netdev);
+	ixgbe_netmap_detach(adapter);
 #endif /* DEV_NETMAP */
 
 	adapter = netdev_priv(netdev);
