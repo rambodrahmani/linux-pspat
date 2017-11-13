@@ -170,7 +170,7 @@ void pspat_mb_cancel(struct pspat_mailbox *m, uintptr_t v);
 
 static inline void pspat_mb_prefetch(struct pspat_mailbox *m)
 {
-	prefetch(m->q[m->cons_read & m->entry_mask]);
+	prefetch((void *)m->q[m->cons_read & m->entry_mask]);
 }
 
 #endif /* __PSPAT_MAILBOX_H */
