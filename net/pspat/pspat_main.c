@@ -462,6 +462,7 @@ pspat_destroy(void)
 		arbp->snd_task = NULL;
 	}
 
+	pspat_sender_shutdown(&arbp->senders[0]);
 	pspat_shutdown(arbp);
 	free_pages((unsigned long)arbp, order_base_2(pspat_pages));
 	arbp = NULL;

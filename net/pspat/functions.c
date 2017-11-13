@@ -556,7 +556,7 @@ pspat_shutdown(struct pspat *arb)
 		BUG_ON(txq->pspat_markq_head != NULL ||
 			txq->pspat_markq_tail != NULL);
 	}
-	printk("%s: validq lists drained, found %d skbs\n", __func__, n);
+	printk("%s: Arbiter validq lists drained, found %d skbs\n", __func__, n);
 
 	/* Return all the stolen qdiscs. */
 	for (n = 0, _q = &arb->qdiscs, q = *_q; q; _q = &q->pspat_next, q = *_q) {
@@ -708,5 +708,5 @@ pspat_sender_shutdown(struct pspat_sender *s)
 		BUG_ON(txq->pspat_markq_head != NULL ||
 			txq->pspat_markq_tail != NULL);
 	}
-	printk("%s: validq lists drained, found %d skbs\n", __func__, n);
+	printk("%s: Sender validq lists drained, found %d skbs\n", __func__, n);
 }
