@@ -114,6 +114,13 @@ retry:
 	return skb;
 }
 
+static inline void
+pspat_arb_prefetch(struct pspat *arb, struct pspat_queue *pq)
+{
+	if (pq->arb_last_mb != NULL)
+		pspat_mb_prefetch(pq->arb_last_mb);
+}
+
 /* mark skb as eligible for transmission on a netdev_queue, and
  * make sure this queue is part of the list of active queues */
 static inline void
@@ -306,6 +313,8 @@ pspat_do_arbiter(struct pspat *arb)
 			continue;
 		}
 		pq->arb_extract_next = now + (pspat_arb_interval_ns << 10);
+
+		pspat_arb_prefetch(arb, (i + 1 < arb->n_queues ? pq + 1 : arb->queues));
 
 		while ( (skb = pspat_arb_get_skb(arb, pq)) ) {
 			int rc;
