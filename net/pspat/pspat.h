@@ -20,6 +20,11 @@ struct pspat_queue {
 	struct list_head	mb_to_clear;
 };
 
+struct pspat_sender {
+	struct pspat_mailbox	*mb;
+	struct list_head	active_txqs;
+};
+
 struct pspat {
 	struct task_struct	*arb_task;
 	struct task_struct	*snd_task;
@@ -52,7 +57,7 @@ struct pspat {
 
 	/* mailboxes between the arbiter and the senders
 	 * (used with PSPAT_XMIT_MODE_DISPATCH) */
-	struct pspat_mailbox	*snd_mbs[1];
+	struct pspat_sender	senders[1];
 
 	/* mailboxes between clients and the arbiter */
 	int			n_queues;
@@ -67,7 +72,9 @@ int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	              struct net_device *dev, struct netdev_queue *txq);
 void pspat_shutdown(struct pspat *arb);
 
-int pspat_do_sender(struct pspat *arb);
+int pspat_do_sender(struct pspat_sender *s);
+
+void pspat_sender_shutdown(struct pspat_sender *s);
 
 int pspat_create_client_queue(void);
 

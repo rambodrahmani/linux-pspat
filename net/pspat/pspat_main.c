@@ -420,18 +420,19 @@ arb_worker_func(void *data)
 static int
 snd_worker_func(void *data)
 {
-	struct pspat *arb = (struct pspat *)data;
+	struct pspat_sender *s = (struct pspat_sender *)data;
 
 	while (!kthread_should_stop()) {
 		if (pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH
 						|| !pspat_enable) {
 			printk("PSPAT dispatcher deactivated\n");
+			pspat_sender_shutdown(s);
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule();
 			printk("PSPAT dispatcher activated\n");
 
 		} else {
-			pspat_do_sender(arb);
+			pspat_do_sender(s);
 			if (need_resched()) {
 				set_current_state(TASK_INTERRUPTIBLE);
 				schedule_timeout(1);
@@ -558,7 +559,8 @@ pspat_create(void)
 		if (ret ) {
 			goto fail;
 		}
-		arbp->snd_mbs[i] = m;
+		arbp->senders[i].mb = m;
+		INIT_LIST_HEAD(&arbp->senders[i].active_txqs);
 		m = (void *)m + mb_size;
 	}
 
@@ -581,7 +583,8 @@ pspat_create(void)
 		goto fail;
 	}
 
-	arbp->snd_task = kthread_create(snd_worker_func, arbp, "pspat-snd");
+	arbp->snd_task = kthread_create(snd_worker_func, &arbp->senders[0],
+					"pspat-snd");
 	if (IS_ERR(arbp->snd_task)) {
 		ret = -PTR_ERR(arbp->snd_task);
 		goto fail2;

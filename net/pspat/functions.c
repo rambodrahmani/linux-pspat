@@ -144,10 +144,10 @@ pspat_mark(struct list_head *active_queues, struct sk_buff *skb)
 static int
 pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
 {
-	struct pspat_mailbox *m = arb->snd_mbs[0];
+	struct pspat_sender *s = &arb->senders[0];
 	int err;
 
-	err = pspat_mb_insert(m, skb);
+	err = pspat_mb_insert(s->mb, skb);
 	if (err) {
 		/* Drop this skb and possibly set the backpressure
 		 * flag for the last client on the per-CPU queue
@@ -635,22 +635,19 @@ retry:
 
 /* Body of the sender. */
 int
-pspat_do_sender(struct pspat *arb)
+pspat_do_sender(struct pspat_sender *s)
 {
-	struct pspat_mailbox *m = arb->snd_mbs[0];
-	struct list_head active_txqs;
+	struct pspat_mailbox *m = s->mb;
 	struct sk_buff *skb;
 	int nsent = 0;
 
-	INIT_LIST_HEAD(&active_txqs);
-
 	while (nsent < 256 && (skb = pspat_mb_extract(m)) != NULL) {
-		pspat_mark(&active_txqs, skb);
+		pspat_mark(&s->active_txqs, skb);
 		nsent ++;
 	}
 
 	pspat_mb_clear(m);
-	pspat_txqs_flush(&active_txqs);
+	pspat_txqs_flush(&s->active_txqs);
 
 	pspat_snd_deq += nsent;
 
@@ -659,4 +656,41 @@ pspat_do_sender(struct pspat *arb)
 	}
 
 	return nsent;
+}
+
+void
+pspat_sender_shutdown(struct pspat_sender *s)
+{
+	struct netdev_queue *txq, *txq_next;
+	struct sk_buff *skb;
+	int n = 0;
+
+	/* Drain the sender mailbox. */
+	while ( (skb = pspat_mb_extract(s->mb)) ) {
+		kfree_skb(skb);
+		n ++;
+	}
+	printk("%s: Sender MB drained, found %d skbs\n", __func__, n);
+
+	/* Also drain the validq of all the active tx queues. */
+	n = 0;
+	list_for_each_entry_safe(txq, txq_next, &s->active_txqs, pspat_active) {
+		/* We can't call kfree_skb_list(), because this function does
+		 * not unlink the skbuffs from the list.
+		 * Unlinking is important in case the refcount of some of the
+		 * skbuffs does not go to zero here, that would mean possible
+		 * dangling pointers. */
+		while (txq->pspat_validq_head != NULL) {
+			struct sk_buff *next = txq->pspat_validq_head->next;
+			txq->pspat_validq_head->next = NULL;
+			kfree_skb(txq->pspat_validq_head);
+			txq->pspat_validq_head = next;
+			n ++;
+		}
+		txq->pspat_validq_tail = NULL;
+		list_del_init(&txq->pspat_active);
+		BUG_ON(txq->pspat_markq_head != NULL ||
+			txq->pspat_markq_tail != NULL);
+	}
+	printk("%s: validq lists drained, found %d skbs\n", __func__, n);
 }
