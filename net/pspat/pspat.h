@@ -38,11 +38,6 @@ struct pspat {
 	 * safe opportunity
 	 */
 	struct list_head	mb_to_delete;
-	/* number of empty client lists found in the last round
-	 * (after a round with only empty CLs, we can safely
-	 * delete the mbs in the mb_to_delete list)
-	 */
-	int			empty_inqs;
 
 	/* Statistics to evaluate the cost of an arbiter loop. */
 	unsigned int		num_loops;

@@ -94,7 +94,6 @@ retry:
 	/* first, get the current mailbox for this cpu */
 	m = pspat_arb_get_mb(pq);
 	if (m == NULL) {
-		arb->empty_inqs++;
 		return NULL;
 	}
 	/* try to extract an skb from the current mailbox */
@@ -287,6 +286,11 @@ pspat_do_arbiter(struct pspat *arb)
 	static u64 last_pspat_rate = 0;
 	static u64 picos_per_byte = 1;
 	unsigned int nreqs = 0;
+	/* number of empty client lists found in the last round
+	 * (after a round with only empty CLs, we can safely
+	 * delete the mbs in the mb_to_delete list)
+	 */
+	int empty_inqs = 0;
 
 	if (unlikely(pspat_rate != last_pspat_rate)) {
 		/* Avoid division in the dequeue stage below by
@@ -303,11 +307,11 @@ pspat_do_arbiter(struct pspat *arb)
 	 * and now (we assume they arrived at last_check)
 	 */
 
-	arb->empty_inqs = 0; /* this may be incremented by pspat_arb_get_skb() below */
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
 		struct sk_buff *to_free = NULL;
 		struct sk_buff *skb;
+		bool empty = true;
 
 		if (now < pq->arb_extract_next) {
 			continue;
@@ -319,6 +323,7 @@ pspat_do_arbiter(struct pspat *arb)
 		while ( (skb = pspat_arb_get_skb(arb, pq)) ) {
 			int rc;
 
+			empty = false;
 			++nreqs;
 			if (!pspat_tc_bypass) {
 				/*
@@ -405,8 +410,11 @@ pspat_do_arbiter(struct pspat *arb)
 		if (to_free) {
 			kfree_skb_list(to_free);
 		}
+		if (empty) {
+			++empty_inqs;
+		}
 	}
-	if (arb->empty_inqs == arb->n_queues) {
+	if (empty_inqs == arb->n_queues) {
 		pspat_arb_delete_dead_mbs(arb);
 	}
 	for (i = 0; i < arb->n_queues; i++) {
