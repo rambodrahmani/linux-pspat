@@ -608,8 +608,8 @@ retry:
 	arb = rcu_dereference(pspat_arb);
 	if (arb) {
 		/* If the arbiter is running, we cannot delete the mailbox
-		 * by ourselves. Instead, we send the PSPAT_LAST_SKB to
-		 * notify the arbiter of our departure.
+		 * by ourselves. Instead, we set the "dead" flag and insert
+		 * the mailbox in the client list.
 		 */
 		cpu = get_cpu();
 		pq = arb->queues + cpu;

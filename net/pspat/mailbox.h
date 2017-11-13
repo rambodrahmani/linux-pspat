@@ -78,11 +78,7 @@ int pspat_mb_init(struct pspat_mailbox *m, const char *name, unsigned long entri
  */
 void pspat_mb_delete(struct pspat_mailbox *m);
 
-static inline void pspat_mb_dump_state(struct pspat_mailbox *m)
-{
-	printk("%s: cc %lu, cr %lu, pw %lu, pc %lu\n", m->name,
-		m->cons_clear, m->cons_read, m->prod_write, m->prod_check);
-}
+void pspat_mb_dump_state(struct pspat_mailbox *m);
 
 /**
  * pspat_mb_insert - enqueue a new value

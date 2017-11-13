@@ -66,3 +66,11 @@ pspat_mb_delete(struct pspat_mailbox *m)
 #endif
 	kfree(m);
 }
+
+
+void
+pspat_mb_dump_state(struct pspat_mailbox *m)
+{
+	printk("%s: cc %lu, cr %lu, pw %lu, pc %lu\n", m->name,
+		m->cons_clear, m->cons_read, m->prod_write, m->prod_check);
+}
