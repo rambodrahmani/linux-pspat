@@ -11,7 +11,7 @@ struct pspat_queue {
 
 	/* client fields */
 	START_NEW_CACHELINE
-	struct pspat_mailbox   *cli_last_mb;
+	u64			cli_last_mb;
 
 	/* arbiter fields */
 	START_NEW_CACHELINE

@@ -5,6 +5,13 @@
 
 #include "pspat.h"
 
+/* Pseudo-identifier for client mailboxes. It's used by pspat_cli_push()
+ * to decide when to insert an entry in the CL. Way safer than the previous
+ * approach, but there are still theoretical race conditions for the
+ * identifiers to be reused.
+ */
+static atomic_t mb_next_id = ATOMIC_INIT(0);
+
 /* push a new packet to the client queue
  * returns -ENOBUFS if the queue is full
  */
@@ -18,6 +25,7 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 		err = pspat_create_client_queue();
 		if (err)
 			return err;
+		current->pspat_mb->identifier = atomic_inc_return(&mb_next_id);
 	}
 	m = current->pspat_mb;
 
@@ -35,11 +43,11 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 	if (err)
 		return err;
 	/* avoid duplicate notification */
-	if (pq->cli_last_mb != m) {
+	if (pq->cli_last_mb != m->identifier) {
 		smp_mb(); /* let the arbiter see the insert above */
 		err = pspat_mb_insert(pq->inq, m);
 		BUG_ON(err);
-		pq->cli_last_mb = m;
+		pq->cli_last_mb = m->identifier;
 	}
 
 	return 0;
