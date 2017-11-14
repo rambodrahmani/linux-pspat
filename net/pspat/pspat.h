@@ -93,7 +93,7 @@ extern u64 *pspat_rounds;
 extern u64 pspat_arb_loop_avg_ns;
 extern u64 pspat_arb_loop_max_ns;
 extern u64 pspat_arb_loop_avg_reqs;
-extern uint32_t pspat_qdisc_batch;
+extern uint32_t pspat_arb_qdisc_batch;
 extern uint32_t pspat_dispatch_batch;
 extern struct pspat_stats *pspat_stats;
 

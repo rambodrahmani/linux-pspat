@@ -398,7 +398,7 @@ pspat_do_arbiter(struct pspat *arb)
 				/* XXX temporary workaround to set
 				 * the per-Qdisc parameters
 				 */
-				q->pspat_batch_limit = pspat_qdisc_batch;
+				q->pspat_batch_limit = pspat_arb_qdisc_batch;
 			}
 
 			rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
@@ -435,7 +435,7 @@ pspat_do_arbiter(struct pspat *arb)
 		unsigned int ndeq = 0;
 
 		while (next_link_idle <= now &&
-			ndeq < pspat_qdisc_batch)
+			ndeq < pspat_arb_qdisc_batch)
 		{
 			struct sk_buff *skb = q->gso_skb;
 
@@ -480,7 +480,7 @@ pspat_do_arbiter(struct pspat *arb)
                  * the link bandwidth, we need to move next_link_idle
                  * forward, in order to avoid accumulating credits. */
                 if (next_link_idle <= now &&
-			ndeq < pspat_qdisc_batch) {
+			ndeq < pspat_arb_qdisc_batch) {
                     next_link_idle = now;
                 }
 		q->pspat_next_link_idle = next_link_idle;

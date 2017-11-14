@@ -28,7 +28,7 @@ int pspat_single_txq __read_mostly = 1; /* use only one hw queue */
 int pspat_tc_bypass __read_mostly = 0;
 u64 pspat_rate __read_mostly = 40000000000; // 40Gb/s
 u64 pspat_arb_interval_ns __read_mostly = 1000;
-u32 pspat_qdisc_batch __read_mostly = 512;
+u32 pspat_arb_qdisc_batch __read_mostly = 512;
 u32 pspat_dispatch_batch __read_mostly = 256;
 u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_backpressure_drop = 0;
@@ -153,10 +153,10 @@ static struct ctl_table pspat_static_ctl[] = {
 		.extra2		= &pspat_ulongmax,
 	},
 	{
-		.procname	= "qdisc_batch",
+		.procname	= "arb_qdisc_batch",
 		.maxlen		= sizeof(u32),
 		.mode		= 0644,
-		.data		= &pspat_qdisc_batch,
+		.data		= &pspat_arb_qdisc_batch,
 		.proc_handler	= &proc_dointvec,
 	},
 	{
@@ -212,7 +212,7 @@ static struct ctl_table pspat_static_ctl[] = {
 		.extra2		= &pspat_ulongmax,
 	},
 	{
-		.procname	= "snd_deq",
+		.procname	= "dispatch_deq",
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
 		.data		= &pspat_dispatch_deq,

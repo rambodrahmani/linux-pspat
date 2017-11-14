@@ -8,7 +8,7 @@ sudo sysctl net.pspat.tc_bypass=0
 sudo sysctl net.pspat.single_txq=0
 sudo sysctl net.pspat.mailbox_entries=512
 sudo sysctl net.pspat.mailbox_line_size=128
-sudo sysctl net.pspat.qdisc_batch=1000
+sudo sysctl net.pspat.arb_qdisc_batch=1000
 sudo sysctl net.pspat.enable=1
 
 sudo taskset -pc 7 $(pgrep pspat-arb)
