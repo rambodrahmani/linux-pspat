@@ -7,8 +7,9 @@
 
 /* Pseudo-identifier for client mailboxes. It's used by pspat_cli_push()
  * to decide when to insert an entry in the CL. Way safer than the previous
- * approach, but there are still theoretical race conditions for the
- * identifiers to be reused.
+ * approach, but there are still theoretical race conditions for an
+ * identifier to be reused while a previous process with the same identifier
+ * is still alive.
  */
 static atomic_t mb_next_id = ATOMIC_INIT(0);
 
@@ -397,7 +398,7 @@ pspat_do_arbiter(struct pspat *arb)
 				/* XXX temporary workaround to set
 				 * the per-Qdisc parameters
 				 */
-				q->pspat_batch_limit = pspat_qdisc_batch_limit;
+				q->pspat_batch_limit = pspat_qdisc_batch;
 			}
 
 			rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
@@ -434,7 +435,7 @@ pspat_do_arbiter(struct pspat *arb)
 		unsigned int ndeq = 0;
 
 		while (next_link_idle <= now &&
-			ndeq < pspat_qdisc_batch_limit)
+			ndeq < pspat_qdisc_batch)
 		{
 			struct sk_buff *skb = q->gso_skb;
 
@@ -479,7 +480,7 @@ pspat_do_arbiter(struct pspat *arb)
                  * the link bandwidth, we need to move next_link_idle
                  * forward, in order to avoid accumulating credits. */
                 if (next_link_idle <= now &&
-			ndeq < pspat_qdisc_batch_limit) {
+			ndeq < pspat_qdisc_batch) {
                     next_link_idle = now;
                 }
 		q->pspat_next_link_idle = next_link_idle;
@@ -653,12 +654,11 @@ retry:
 int
 pspat_do_dispatcher(struct pspat_dispatcher *s)
 {
-	const int pspat_dispatch_deq_batch = 256;
 	struct pspat_mailbox *m = s->mb;
 	struct sk_buff *skb;
 	int ndeq = 0;
 
-	while (ndeq < pspat_dispatch_deq_batch && (skb = pspat_mb_extract(m)) != NULL) {
+	while (ndeq < pspat_dispatch_batch && (skb = pspat_mb_extract(m)) != NULL) {
 		pspat_mark(&s->active_txqs, skb);
 		ndeq ++;
 	}
