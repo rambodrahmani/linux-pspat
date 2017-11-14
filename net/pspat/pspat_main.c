@@ -30,6 +30,7 @@ u64 pspat_rate __read_mostly = 40000000000; // 40Gb/s
 u64 pspat_arb_interval_ns __read_mostly = 1000;
 u32 pspat_arb_qdisc_batch __read_mostly = 512;
 u32 pspat_dispatch_batch __read_mostly = 256;
+u32 pspat_dispatch_sleep_us __read_mostly = 0;
 u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_backpressure_drop = 0;
 u64 pspat_arb_tc_deq = 0;
@@ -164,6 +165,13 @@ static struct ctl_table pspat_static_ctl[] = {
 		.maxlen		= sizeof(u32),
 		.mode		= 0644,
 		.data		= &pspat_dispatch_batch,
+		.proc_handler	= &proc_dointvec,
+	},
+	{
+		.procname	= "dispatch_sleep_us",
+		.maxlen		= sizeof(u32),
+		.mode		= 0644,
+		.data		= &pspat_dispatch_sleep_us,
 		.proc_handler	= &proc_dointvec,
 	},
 	{

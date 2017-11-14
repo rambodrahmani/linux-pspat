@@ -401,6 +401,10 @@ pspat_do_arbiter(struct pspat *arb)
 				q->pspat_batch_limit = pspat_arb_qdisc_batch;
 			}
 
+			if (unlikely(skb->next)) {
+				printk("WARNING: skb->next was not NULL\n");
+				skb->next = skb->prev = NULL;
+			}
 			rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
 			if (unlikely(pspat_debug_xmit)) {
 				printk("enq(%p,%p)-->%d\n", q, skb, rc);
@@ -669,6 +673,10 @@ pspat_do_dispatcher(struct pspat_dispatcher *s)
 
 	if (unlikely(pspat_debug_xmit && ndeq)) {
 		printk("PSPAT sender processed %d skbs\n", ndeq);
+	}
+
+	if (pspat_dispatch_sleep_us) {
+		usleep_range(pspat_dispatch_sleep_us, pspat_dispatch_sleep_us);
 	}
 
 	return ndeq;
