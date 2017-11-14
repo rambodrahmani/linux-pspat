@@ -151,7 +151,7 @@ pspat_mark(struct list_head *active_queues, struct sk_buff *skb)
 static int
 pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
 {
-	struct pspat_sender *s = &arb->senders[0];
+	struct pspat_dispatcher *s = &arb->dispatchers[0];
 	int err;
 
 	err = pspat_mb_insert(s->mb, skb);
@@ -649,33 +649,33 @@ retry:
 	}
 }
 
-/* Body of the sender. */
+/* Body of the dispatcher. */
 int
-pspat_do_sender(struct pspat_sender *s)
+pspat_do_dispatcher(struct pspat_dispatcher *s)
 {
+	const int pspat_dispatch_deq_batch = 256;
 	struct pspat_mailbox *m = s->mb;
 	struct sk_buff *skb;
-	int nsent = 0;
+	int ndeq = 0;
 
-	while (nsent < 256 && (skb = pspat_mb_extract(m)) != NULL) {
+	while (ndeq < pspat_dispatch_deq_batch && (skb = pspat_mb_extract(m)) != NULL) {
 		pspat_mark(&s->active_txqs, skb);
-		nsent ++;
+		ndeq ++;
 	}
 
+	pspat_dispatch_deq += ndeq;
 	pspat_mb_clear(m);
 	pspat_txqs_flush(&s->active_txqs);
 
-	pspat_snd_deq += nsent;
-
-	if (unlikely(pspat_debug_xmit && nsent)) {
-		printk("PSPAT sender processed %d skbs\n", nsent);
+	if (unlikely(pspat_debug_xmit && ndeq)) {
+		printk("PSPAT sender processed %d skbs\n", ndeq);
 	}
 
-	return nsent;
+	return ndeq;
 }
 
 void
-pspat_sender_shutdown(struct pspat_sender *s)
+pspat_dispatcher_shutdown(struct pspat_dispatcher *s)
 {
 	struct netdev_queue *txq, *txq_next;
 	struct sk_buff *skb;

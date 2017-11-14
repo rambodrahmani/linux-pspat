@@ -20,7 +20,7 @@ struct pspat_queue {
 	struct list_head	mb_to_clear;
 };
 
-struct pspat_sender {
+struct pspat_dispatcher {
 	struct pspat_mailbox	*mb;
 	struct list_head	active_txqs;
 };
@@ -50,9 +50,9 @@ struct pspat {
 	 * transmitting */
 	struct list_head	active_txqs;
 
-	/* mailboxes between the arbiter and the senders
+	/* mailboxes between the arbiter and the dispatchers
 	 * (used with PSPAT_XMIT_MODE_DISPATCH) */
-	struct pspat_sender	senders[1];
+	struct pspat_dispatcher	dispatchers[1];
 
 	/* mailboxes between clients and the arbiter */
 	int			n_queues;
@@ -67,9 +67,9 @@ int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	              struct net_device *dev, struct netdev_queue *txq);
 void pspat_shutdown(struct pspat *arb);
 
-int pspat_do_sender(struct pspat_sender *s);
+int pspat_do_dispatcher(struct pspat_dispatcher *s);
 
-void pspat_sender_shutdown(struct pspat_sender *s);
+void pspat_dispatcher_shutdown(struct pspat_dispatcher *s);
 
 int pspat_create_client_queue(void);
 
@@ -88,7 +88,7 @@ extern u64 pspat_arb_backpressure_drop;
 extern u64 pspat_arb_tc_deq;
 extern u64 pspat_arb_dispatch_drop;
 extern u64 pspat_arb_xmit_requeue;
-extern u64 pspat_snd_deq;
+extern u64 pspat_dispatch_deq;
 extern u64 *pspat_rounds;
 extern u64 pspat_arb_loop_avg_ns;
 extern u64 pspat_arb_loop_max_ns;

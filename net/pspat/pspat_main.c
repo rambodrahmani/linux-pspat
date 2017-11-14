@@ -33,7 +33,7 @@ u64 pspat_arb_tc_enq_drop = 0;
 u64 pspat_arb_backpressure_drop = 0;
 u64 pspat_arb_tc_deq = 0;
 u64 pspat_arb_dispatch_drop = 0;
-u64 pspat_snd_deq = 0;
+u64 pspat_dispatch_deq = 0;
 u64 pspat_arb_loop_avg_ns = 0;
 u64 pspat_arb_loop_max_ns = 0;
 u64 pspat_arb_loop_avg_reqs = 0;
@@ -207,7 +207,7 @@ static struct ctl_table pspat_static_ctl[] = {
 		.procname	= "snd_deq",
 		.maxlen		= sizeof(u64),
 		.mode		= 0444,
-		.data		= &pspat_snd_deq,
+		.data		= &pspat_dispatch_deq,
 		.proc_handler	= &proc_doulongvec_minmax,
 		.extra1		= &pspat_ulongzero,
 		.extra2		= &pspat_ulongmax,
@@ -420,19 +420,19 @@ arb_worker_func(void *data)
 static int
 snd_worker_func(void *data)
 {
-	struct pspat_sender *s = (struct pspat_sender *)data;
+	struct pspat_dispatcher *s = (struct pspat_dispatcher *)data;
 
 	while (!kthread_should_stop()) {
 		if (pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH
 						|| !pspat_enable) {
 			printk("PSPAT dispatcher deactivated\n");
-			pspat_sender_shutdown(s);
+			pspat_dispatcher_shutdown(s);
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule();
 			printk("PSPAT dispatcher activated\n");
 
 		} else {
-			pspat_do_sender(s);
+			pspat_do_dispatcher(s);
 			if (need_resched()) {
 				set_current_state(TASK_INTERRUPTIBLE);
 				schedule_timeout(1);
@@ -462,7 +462,7 @@ pspat_destroy(void)
 		arbp->snd_task = NULL;
 	}
 
-	pspat_sender_shutdown(&arbp->senders[0]);
+	pspat_dispatcher_shutdown(&arbp->dispatchers[0]);
 	pspat_shutdown(arbp);
 	free_pages((unsigned long)arbp, order_base_2(pspat_pages));
 	arbp = NULL;
@@ -510,7 +510,7 @@ static int
 pspat_create(void)
 {
 	int cpus = num_online_cpus(), i;
-	int senders = 1;
+	int dispatchers = 1;
 	struct pspat_mailbox *m;
 	unsigned long mb_entries, mb_line_size;
 	size_t mb_size, arb_size;
@@ -526,7 +526,7 @@ pspat_create(void)
 
 	arb_size = roundup(sizeof(*arbp) + cpus * sizeof(*arbp->queues),
 				INTERNODE_CACHE_BYTES);
-	pspat_pages = DIV_ROUND_UP(arb_size + mb_size * (cpus + senders),
+	pspat_pages = DIV_ROUND_UP(arb_size + mb_size * (cpus + dispatchers),
 				PAGE_SIZE);
 
 	arbp = (struct pspat *)__get_free_pages(GFP_KERNEL, order_base_2(pspat_pages));
@@ -553,15 +553,15 @@ pspat_create(void)
 	INIT_LIST_HEAD(&arbp->mb_to_delete);
 	INIT_LIST_HEAD(&arbp->active_txqs);
 
-	for (i = 0; i < senders; i++) {
+	for (i = 0; i < dispatchers; i++) {
 		char name[PSPAT_MB_NAMSZ];
 		snprintf(name, PSPAT_MB_NAMSZ, "T-%d", i);
 		ret = pspat_mb_init(m, name, mb_entries, mb_line_size);
 		if (ret ) {
 			goto fail;
 		}
-		arbp->senders[i].mb = m;
-		INIT_LIST_HEAD(&arbp->senders[i].active_txqs);
+		arbp->dispatchers[i].mb = m;
+		INIT_LIST_HEAD(&arbp->dispatchers[i].active_txqs);
 		m = (void *)m + mb_size;
 	}
 
@@ -584,7 +584,7 @@ pspat_create(void)
 		goto fail;
 	}
 
-	arbp->snd_task = kthread_create(snd_worker_func, &arbp->senders[0],
+	arbp->snd_task = kthread_create(snd_worker_func, &arbp->dispatchers[0],
 					"pspat-snd");
 	if (IS_ERR(arbp->snd_task)) {
 		ret = -PTR_ERR(arbp->snd_task);
