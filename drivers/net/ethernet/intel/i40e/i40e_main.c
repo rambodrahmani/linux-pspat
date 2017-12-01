@@ -3222,6 +3222,10 @@ static int i40e_configure_rx_ring(struct i40e_ring *ring)
 	/* set the prefena field to 1 because the manual says to */
 	rx_ctx.prefena = 1;
 
+#ifdef DEV_NETMAP
+	i40e_netmap_preconfigure_rx_ring(ring, &rx_ctx);
+#endif /* DEV_NETMAP */
+
 	/* clear the context in the HMC */
 	err = i40e_clear_lan_rx_queue_context(hw, pf_q);
 	if (err) {
