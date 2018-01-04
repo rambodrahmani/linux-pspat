@@ -30,7 +30,7 @@ pspat_mb_init(struct pspat_mailbox *m, const char *name,
 	unsigned long entries_per_line;
 
 	if (!is_power_of_2(entries) || !is_power_of_2(line_size) ||
-			entries <= 2 * line_size || line_size < sizeof(uintptr_t))
+			entries * sizeof(uintptr_t) <= 2 * line_size || line_size < sizeof(uintptr_t))
 		return -EINVAL;
 
 	strncpy(m->name, name, PSPAT_MB_NAMSZ);
