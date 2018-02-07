@@ -308,6 +308,11 @@ static u32 get_bitfield32(const __le32 *bitfield, u32 pos, u32 size)
 #endif /* __BIG_ENDIAN_BITFIELD  */
 
 
+#if defined(CONFIG_NETMAP) || defined(CONFIG_NETMAP_MODULE) || defined(DEV_NETMAP)
+#include "if_vmxnet3_netmap.h"
+#endif
+
+
 static void
 vmxnet3_unmap_tx_buf(struct vmxnet3_tx_buf_info *tbi,
 		     struct pci_dev *pdev)
@@ -366,6 +371,14 @@ vmxnet3_tq_tx_complete(struct vmxnet3_tx_queue *tq,
 {
 	int completed = 0;
 	union Vmxnet3_GenericDesc *gdesc;
+
+#ifdef DEV_NETMAP
+	struct net_device *netdev = adapter->netdev;
+
+	if (netmap_tx_irq(netdev, 0) != NM_IRQ_PASS)
+		return 0;
+#endif
+		
 
 	gdesc = tq->comp_ring.base + tq->comp_ring.next2proc;
 	while (VMXNET3_TCD_GET_GEN(&gdesc->tcd) == tq->comp_ring.gen) {
@@ -1291,6 +1304,15 @@ vmxnet3_rq_rx_complete(struct vmxnet3_rx_queue *rq,
 	struct Vmxnet3_RxDesc rxCmdDesc;
 	struct Vmxnet3_RxCompDesc rxComp;
 #endif
+
+#ifdef DEV_NETMAP
+	u_int total_packets = 0;
+	struct net_device *netdev = adapter->netdev;
+	
+	if (netmap_rx_irq(netdev, 0, &total_packets) != NM_IRQ_PASS)
+		return 1;
+#endif /* DEV_NETMAP */
+
 	vmxnet3_getRxComp(rcd, &rq->comp_ring.base[rq->comp_ring.next2proc].rcd,
 			  &rxComp);
 	while (rcd->gen == rq->comp_ring.gen) {
@@ -2572,6 +2594,10 @@ vmxnet3_activate_dev(struct vmxnet3_adapter *adapter)
 		adapter->rx_queue[0].rx_ring[0].size,
 		adapter->rx_queue[0].rx_ring[1].size);
 
+#ifdef DEV_NETMAP
+	vmxnet3_netmap_init_buffers(adapter);
+#endif /* DEV_NETMAP */    
+
 	vmxnet3_tq_init_all(adapter);
 	err = vmxnet3_rq_init_all(adapter);
 	if (err) {
@@ -3496,6 +3522,11 @@ vmxnet3_probe_device(struct pci_dev *pdev,
 		goto err_register;
 	}
 
+    
+#ifdef DEV_NETMAP
+	vmxnet3_netmap_attach(adapter);
+#endif /* DEV_NETMAP */    
+
 	vmxnet3_check_link(adapter, false);
 	return 0;
 
@@ -3552,6 +3583,10 @@ vmxnet3_remove_device(struct pci_dev *pdev)
 	cancel_work_sync(&adapter->work);
 
 	unregister_netdev(netdev);
+
+#ifdef DEV_NETMAP
+	vmxnet3_netmap_detach(netdev);
+#endif /* DEV_NETMAP */    
 
 	vmxnet3_free_intr_resources(adapter);
 	vmxnet3_free_pci_resources(adapter);
