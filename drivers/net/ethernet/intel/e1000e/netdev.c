@@ -1530,6 +1530,10 @@ static bool e1000_clean_jumbo_rx_irq(struct e1000_ring *rx_ring, int *work_done,
 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
 	struct skb_shared_info *shinfo;
 
+#ifdef DEV_NETMAP
+	if (netmap_rx_irq(netdev, 0, work_done))
+		return 1; /* seems to be ignored */
+#endif /* DEV_NETMAP */
 	i = rx_ring->next_to_clean;
 	rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
 	staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
