@@ -2780,6 +2780,10 @@ static void e1000_setup_rctl(struct e1000_adapter *adapter)
 		adapter->rx_ps_pages = pages;
 	else
 		adapter->rx_ps_pages = 0;
+#ifdef DEV_NETMAP
+       /* Keep packet-split disabled with netmap. */
+       adapter->rx_ps_pages = 0;
+#endif /* DEV_NETMAP */
 
 	if (adapter->rx_ps_pages) {
 		/* Configure extra packet-split registers */
