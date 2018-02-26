@@ -4155,6 +4155,15 @@ static bool e1000_clean_jumbo_rx_irq(struct e1000_adapter *adapter,
 	bool cleaned = false;
 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
 
+#ifdef DEV_NETMAP
+	int nm_irq = netmap_rx_irq(netdev, 0, work_done);
+	if (nm_irq != NM_IRQ_PASS) {
+		if (nm_irq == NM_IRQ_RESCHED) {
+			*work_done = work_to_do;
+		}
+		return 1;
+	}
+#endif /* DEV_NETMAP */
 	i = rx_ring->next_to_clean;
 	rx_desc = E1000_RX_DESC(*rx_ring, i);
 	buffer_info = &rx_ring->buffer_info[i];
