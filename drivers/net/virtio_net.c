@@ -1345,7 +1345,6 @@ static int virtnet_poll(struct napi_struct *napi, int budget)
 
 #ifdef DEV_NETMAP
         int work_done = 0;
-	struct virtnet_info *vi = rq->vq->vdev->priv;
 	int nm_irq = netmap_rx_irq(vi->dev, vq2rxq(rq->vq), &work_done);
 
 	if (nm_irq == NM_IRQ_COMPLETED) {
