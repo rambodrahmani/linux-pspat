@@ -4196,7 +4196,7 @@ void ixgbe_configure_rx_ring(struct ixgbe_adapter *adapter,
 		ixgbe_alloc_rx_buffers_zc(ring, ixgbe_desc_unused(ring));
 	else
 		ixgbe_alloc_rx_buffers(ring, ixgbe_desc_unused(ring));
-
+}
 
 static void ixgbe_setup_psrtype(struct ixgbe_adapter *adapter)
 {
