@@ -16,3 +16,15 @@ several of them using the Restructured Text markup notation.
 Please read the Documentation/process/changes.rst file, as it contains the
 requirements for building and running the kernel, and information about
 the problems which may result by upgrading your kernel.
+
+PSPAT
+=====
+Enable PSPAT using make menuconfig
+```
+Networking support ---> Networking options ---> PSPAT packet scheduler (NEW)
+```
+After that, once booted, enable PSPAT using
+```
+echo "1" > /proc/sys/net/pspat/enable
+```
+
