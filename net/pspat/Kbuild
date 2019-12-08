@@ -1,3 +1,0 @@
-obj-$(CONFIG_PSPAT) += pspat.o
-pspat-y = pspat_main.o functions.o mailbox.o
-
