@@ -10,6 +10,10 @@
 #include "i40e_txrx_common.h"
 #include "i40e_xsk.h"
 
+#if defined(CONFIG_NETMAP) || defined (CONFIG_NETMAP_MODULE)
+#include <i40e_netmap_linux.h>
+#endif /* DEV_NETMAP */
+
 #define I40E_TXD_CMD (I40E_TX_DESC_CMD_EOP | I40E_TX_DESC_CMD_RS)
 /**
  * i40e_fdir - Generate a Flow Director descriptor based on fdata
@@ -780,6 +784,11 @@ static bool i40e_clean_tx_irq(struct i40e_vsi *vsi,
 	struct i40e_tx_desc *tx_desc;
 	unsigned int total_bytes = 0, total_packets = 0;
 	unsigned int budget = vsi->work_limit;
+
+#ifdef DEV_NETMAP
+	if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index) != NM_IRQ_PASS)
+		return true;
+#endif /* DEV_NETMAP */
 
 	tx_buf = &tx_ring->tx_bi[i];
 	tx_desc = I40E_TX_DESC(tx_ring, i);
@@ -2334,6 +2343,13 @@ static int i40e_clean_rx_irq(struct i40e_ring *rx_ring, int budget)
 	unsigned int xdp_xmit = 0;
 	bool failure = false;
 	struct xdp_buff xdp;
+
+#ifdef DEV_NETMAP
+	int dummy;
+	if (rx_ring->netdev &&
+	    netmap_rx_irq(rx_ring->netdev, rx_ring->queue_index, &dummy) != NM_IRQ_PASS)
+		return 1;
+#endif /* DEV_NETMAP */
 
 	xdp.rxq = &rx_ring->xdp_rxq;
 
