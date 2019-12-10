@@ -712,6 +712,10 @@ static void check_stack_usage(void)
 static inline void check_stack_usage(void) {}
 #endif
 
+#ifdef CONFIG_PSPAT
+extern void exit_pspat(void);
+#endif
+
 void __noreturn do_exit(long code)
 {
 	struct task_struct *tsk = current;
@@ -750,6 +754,10 @@ void __noreturn do_exit(long code)
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		schedule();
 	}
+
+#ifdef CONFIG_PSPAT
+	exit_pspat();
+#endif
 
 	exit_signals(tsk);  /* sets PF_EXITING */
 
