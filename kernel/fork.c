@@ -931,6 +931,10 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	tsk->task_frag.page = NULL;
 	tsk->wake_q.next = NULL;
 
+#ifdef CONFIG_PSPAT
+	tsk->pspat_mb = NULL;
+#endif
+
 	account_kernel_stack(tsk, 1);
 
 	kcov_task_init(tsk);
