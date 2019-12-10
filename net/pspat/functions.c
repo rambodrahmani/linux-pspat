@@ -234,11 +234,15 @@ pspat_txq_flush(struct netdev_queue *txq)
 	struct net_device *dev = txq->dev;
 	int ret = NETDEV_TX_BUSY;
 	struct sk_buff *skb;
+    bool again = false;
 
 	/* Validate all the skbs in the markq. Some (or all) the skbs may be
 	 * dropped. The function may modify the markq head/tail pointers. */
 	txq->pspat_markq_head = validate_xmit_skb_list(txq->pspat_markq_head,
-						dev, &txq->pspat_markq_tail);
+						                           dev,
+                                                   &txq->pspat_markq_tail,
+                                                   &again);
+
 	/* Append the markq to the validq (handling the case where the validq
 	 * was empty and/or the markq is empty) and reset the markq. */
 	if (txq->pspat_validq_head == NULL) {
@@ -295,6 +299,9 @@ pspat_do_arbiter(struct pspat *arb)
 	static u64 last_pspat_rate = 0;
 	static u64 picos_per_byte = 1;
 	unsigned int nreqs = 0;
+    struct sk_buff *gso_skb = skb_peek(&q->gso_skb);
+    struct sk_buff *skb_bad_txq = skb_peek(&q->skb_bad_txq);
+
 	/* number of empty client lists found in the last round
 	 * (after a round with only empty CLs, we can safely
 	 * delete the mbs in the mb_to_delete list)
@@ -366,16 +373,16 @@ pspat_do_arbiter(struct pspat *arb)
 					continue;
 				}
 
-				if (q->gso_skb) {
-					kfree_skb(q->gso_skb);
-					q->gso_skb = NULL;
+				if (gso_skb) {
+					kfree_skb(gso_skb);
+					gso_skb = NULL;
 					qdisc_qstats_backlog_dec(q, skb);
 					q->q.qlen--;
 					j ++;
 				}
-				if (q->skb_bad_txq) {
-					kfree_skb(q->skb_bad_txq);
-					q->skb_bad_txq = NULL;
+				if (skb_bad_txq) {
+					kfree_skb(skb_bad_txq);
+					skb_bad_txq = NULL;
 					qdisc_qstats_backlog_dec(q, skb);
 					q->q.qlen--;
 					j ++;
