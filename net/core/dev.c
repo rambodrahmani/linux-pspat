@@ -4080,7 +4080,7 @@ int dev_direct_xmit(struct sk_buff *skb, u16 queue_id)
 		     !netif_carrier_ok(dev)))
 		goto drop;
 
-	skb = validate_xmit_skb_list(skb, dev, &again);
+    skb = validate_xmit_skb_list(skb, dev, NULL, &again);
 	if (skb != orig_skb)
 		goto drop;
 
