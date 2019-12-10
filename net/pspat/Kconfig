@@ -1,0 +1,12 @@
+config PSPAT
+	bool "PSPAT packet scheduler"
+	depends on NET_RX_BUSY_POLL || XPS
+	default n
+	---help---
+	Compile in the PSPAT packet scheduler.
+
+	PSPAT is a packet scheduler framework that runs the schedulers in
+	a separate threads, using lockless single-producer, single-consumer
+	queues to communicate with traffic sources.
+	This architecture permits a completely lock-free transmit path
+	giving excellent scalability.
