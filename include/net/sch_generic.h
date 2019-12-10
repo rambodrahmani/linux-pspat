@@ -94,6 +94,13 @@ struct Qdisc {
 	int			padded;
 	refcount_t		refcnt;
 
+#ifdef CONFIG_PSPAT
+	int			  pspat_owned;
+	struct Qdisc  *pspat_next;
+	u64			  pspat_next_link_idle;
+	uint32_t      pspat_batch_limit;
+#endif /* CONFIG_PSPAT */
+
 	/*
 	 * For performance sake on SMP, we put highly modified fields at the end
 	 */
