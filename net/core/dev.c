@@ -145,6 +145,12 @@
 
 #include "net-sysfs.h"
 
+#ifdef CONFIG_PSPAT
+extern int pspat_client_handler(struct sk_buff *, struct Qdisc *,
+				 struct net_device *,
+				 struct netdev_queue *);
+#endif /* CONFIG_PSPAT */
+
 #define MAX_GRO_SKBS 8
 #define MAX_NEST_DEV 8
 
@@ -3526,9 +3532,10 @@ out_null:
 	return NULL;
 }
 
-struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *dev, bool *again)
+struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *dev,
+                                       struct sk_buff **ptail, bool *again)
 {
-	struct sk_buff *next, *head = NULL, *tail;
+	struct sk_buff *next, *head = NULL, *tail = NULL;
 
 	for (; skb != NULL; skb = next) {
 		next = skb->next;
@@ -3550,6 +3557,10 @@ struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *d
 		 */
 		tail = skb->prev;
 	}
+
+    if (ptail)
+		*ptail = tail;
+
 	return head;
 }
 EXPORT_SYMBOL_GPL(validate_xmit_skb_list);
@@ -3979,6 +3990,10 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 
 	trace_net_dev_queue(skb);
 	if (q->enqueue) {
+#ifdef CONFIG_PSPAT
+		rc = pspat_client_handler(skb, q, dev, txq);
+		if (rc == -ENOTTY)
+#endif /* CONFIG_PSPAT */
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
 	}
@@ -9117,6 +9132,14 @@ static void netdev_init_one_queue(struct net_device *dev,
 	queue->dev = dev;
 #ifdef CONFIG_BQL
 	dql_init(&queue->dql, HZ);
+#endif
+
+#ifdef CONFIG_PSPAT
+	queue->pspat_markq_head = NULL;
+	queue->pspat_markq_tail = NULL;
+	queue->pspat_validq_head = NULL;
+	queue->pspat_validq_tail = NULL;
+	INIT_LIST_HEAD(&queue->pspat_active);
 #endif
 }
 
