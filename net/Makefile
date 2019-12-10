@@ -84,6 +84,8 @@ endif
 ifneq ($(CONFIG_NET_L3_MASTER_DEV),)
 obj-y				+= l3mdev/
 endif
-obj-$(CONFIG_QRTR)		+= qrtr/
-obj-$(CONFIG_NET_NCSI)		+= ncsi/
-obj-$(CONFIG_XDP_SOCKETS)	+= xdp/
+obj-$(CONFIG_QRTR)          += qrtr/
+obj-$(CONFIG_NET_NCSI)      += ncsi/
+obj-$(CONFIG_PSPAT)         += pspat/
+obj-$(CONFIG_XDP_SOCKETS)   += xdp/
+
