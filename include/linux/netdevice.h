@@ -3720,8 +3720,9 @@ bool netdev_port_same_parent_id(struct net_device *a, struct net_device *b);
 int dev_change_proto_down(struct net_device *dev, bool proto_down);
 int dev_change_proto_down_generic(struct net_device *dev, bool proto_down);
 struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb,
-                				       struct net_device *dev,
-				                       struct sk_buff **ptail);
+                                       struct net_device *dev,
+                                       struct sk_buff **ptail,
+                                       bool *again);
 struct sk_buff *dev_hard_start_xmit(struct sk_buff *skb, struct net_device *dev,
 				    struct netdev_queue *txq, int *ret);
 
