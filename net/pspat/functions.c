@@ -448,13 +448,12 @@ pspat_do_arbiter(struct pspat *arb)
 		while (next_link_idle <= now &&
 			ndeq < pspat_arb_qdisc_batch)
 		{
-			struct sk_buff *skb = q->gso_skb;
+			struct sk_buff *skb = skb_peek(&q->gso_skb);
 
 			if (unlikely(skb)) {
 				/* q->gso_skb may contain a "requeued"
 				   packet which should go out first
 				   (without calling ->dequeue()) */
-				q->gso_skb = NULL;
 				qdisc_qstats_backlog_dec(q, skb);
 				q->q.qlen--;
 			} else {
