@@ -12,6 +12,9 @@
 
 #define PSPAT_MB_DEBUG 1
 
+// this allows to build mailbox_test.c standalone
+typedef uint64_t u64;
+
 struct pspat_mailbox {
 	/* shared (constant) fields */
 	char			name[PSPAT_MB_NAMSZ];
