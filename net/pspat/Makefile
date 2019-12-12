@@ -1,3 +1,11 @@
+################################################################################
+# File: Makefile
+#       Used to build mailbox_test.c as standalone.
+#
+# Author: Rambod Rahmani <rambodrahmani@autistici.org>
+#         Created on 2019-12-12.
+################################################################################
+
 CC=gcc
 CFLAGS=-Wall
 LDFLAGS=-lm
@@ -11,3 +19,4 @@ clean:
 
 test: mailbox_test
 	./mailbox_test
+
