@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0+
+
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
@@ -13,10 +15,12 @@
  */
 static atomic_t mb_next_id = ATOMIC_INIT(0);
 
-/* push a new packet to the client queue
+/**
+ * push a new packet to the client queue
  * returns -ENOBUFS if the queue is full
  */
-static int pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
+static int
+pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 {
 	struct pspat_mailbox *m;
 	int err;
@@ -29,13 +33,12 @@ static int pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 	}
 	m = current->pspat_mb;
 
-	/* The backpressure flag set tells us that the qdisc is being overrun.
-	 * We return an error to propagate the overrun to the client. */
+	/* The backpressure flag set tells us that the qdisc is being overrun. */
+	/* We return an error to propagate the overrun to the client. */
 	if (unlikely(m->backpressure)) {
 		m->backpressure = 0;
-		if (pspat_debug_xmit) {
+		if (pspat_debug_xmit)
 			printk("mailbox %p backpressure\n", m);
-		}
 		return -ENOBUFS;
 	}
 
@@ -53,33 +56,36 @@ static int pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 	return 0;
 }
 
-static void pspat_cli_delete(struct pspat *arb, struct pspat_mailbox *m)
+static void
+pspat_cli_delete(struct pspat *arb, struct pspat_mailbox *m)
 {
 	int i;
 	/* remove m from all the client lists current-mb pointers */
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
+
 		if (pq->arb_last_mb == m)
 			pq->arb_last_mb = NULL;
 	}
 	/* possibily remove this mb from the ack list */
-	if (!list_empty(&m->list)) {
+	if (!list_empty(&m->list))
 		list_del(&m->list);
-	}
+
 	/* insert into the list of mb to be delete */
 	list_add_tail(&m->list, &arb->mb_to_delete);
 }
 
-static struct pspat_mailbox *pspat_arb_get_mb(struct pspat_queue *pq)
+static struct
+pspat_mailbox *pspat_arb_get_mb(struct pspat_queue *pq)
 {
 	struct pspat_mailbox *m = pq->arb_last_mb;
 
 	if (m == NULL || pspat_mb_empty(m)) {
 		m = pspat_mb_extract(pq->inq);
 		if (m) {
-			if (list_empty(&pq->inq->list)) {
+			if (list_empty(&pq->inq->list))
 				list_add_tail(&pq->inq->list, &pq->mb_to_clear);
-			}
+
 			pq->arb_last_mb = m;
 			/* wait for previous updates in the new mailbox */
 			smp_mb();
@@ -89,8 +95,8 @@ static struct pspat_mailbox *pspat_arb_get_mb(struct pspat_queue *pq)
 }
 
 /* extract skb from the local queue */
-static struct sk_buff *pspat_arb_get_skb(struct pspat *arb,
-					 struct pspat_queue *pq)
+static struct
+sk_buff *pspat_arb_get_skb(struct pspat *arb, struct pspat_queue *pq)
 {
 	struct pspat_mailbox *m;
 	struct sk_buff *skb;
@@ -98,16 +104,16 @@ static struct sk_buff *pspat_arb_get_skb(struct pspat *arb,
 retry:
 	/* first, get the current mailbox for this cpu */
 	m = pspat_arb_get_mb(pq);
-	if (m == NULL) {
+	if (m == NULL)
 		return NULL;
-	}
+
 	/* try to extract an skb from the current mailbox */
 	skb = pspat_mb_extract(m);
 	if (skb) {
 		/* let pspat_arb_ack() see this mailbox */
-		if (list_empty(&m->list)) {
+		if (list_empty(&m->list))
 			list_add_tail(&m->list, &pq->mb_to_clear);
-		}
+
 	} else if (unlikely(m->dead)) {
 		/* the client is gone, the arbiter takes
 		 * responsibility in deleting the mb
@@ -118,16 +124,17 @@ retry:
 	return skb;
 }
 
-static inline void pspat_arb_prefetch(struct pspat *arb, struct pspat_queue *pq)
+static inline void
+pspat_arb_prefetch(struct pspat *arb, struct pspat_queue *pq)
 {
 	if (pq->arb_last_mb != NULL)
 		pspat_mb_prefetch(pq->arb_last_mb);
 }
 
-/* mark skb as eligible for transmission on a netdev_queue, and
- * make sure this queue is part of the list of active queues */
-static inline void pspat_mark(struct list_head *active_queues,
-			      struct sk_buff *skb)
+/* mark skb as eligible for transmission on a netdev_queue, and */
+/* make sure this queue is part of the list of active queues */
+static inline void
+pspat_mark(struct list_head *active_queues, struct sk_buff *skb)
 {
 	struct netdev_queue *txq = skb_get_tx_queue(skb->dev, skb);
 
@@ -144,7 +151,8 @@ static inline void pspat_mark(struct list_head *active_queues,
 }
 
 /* move skb to the a sender queue */
-static int pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
+static int
+pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
 {
 	struct pspat_dispatcher *s = &arb->dispatchers[0];
 	int err;
@@ -161,9 +169,9 @@ static int pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
 		pq = pspat_arb->queues + skb->sender_cpu - 1;
 		cli_mb = pq->arb_last_mb;
 
-		if (cli_mb && !cli_mb->backpressure) {
+		if (cli_mb && !cli_mb->backpressure)
 			cli_mb->backpressure = 1;
-		}
+
 		pspat_arb_dispatch_drop++;
 		kfree_skb(skb);
 	}
@@ -173,7 +181,8 @@ static int pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
 
 /* Zero out the used skbs in the client mailboxes and the
  * client lists. */
-static void pspat_arb_ack(struct pspat_queue *pq)
+static void
+pspat_arb_ack(struct pspat_queue *pq)
 {
 	struct pspat_mailbox *mb_cursor, *mb_next;
 
@@ -184,7 +193,8 @@ static void pspat_arb_ack(struct pspat_queue *pq)
 }
 
 /* delete all known dead mailboxes */
-static void pspat_arb_delete_dead_mbs(struct pspat *arb)
+static void
+pspat_arb_delete_dead_mbs(struct pspat *arb)
 {
 	struct pspat_mailbox *mb_cursor, *mb_next;
 
@@ -194,7 +204,8 @@ static void pspat_arb_delete_dead_mbs(struct pspat *arb)
 	}
 }
 
-static void pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
+static void
+pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 {
 	struct pspat_mailbox *m = pq->arb_last_mb;
 	struct sk_buff *skb;
@@ -206,9 +217,8 @@ static void pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 		dropped++;
 	}
 
-	if (!m->backpressure) {
+	if (!m->backpressure)
 		m->backpressure = 1;
-	}
 
 	if (unlikely(pspat_debug_xmit)) {
 		printk("PSPAT drained mailbox %s [%d skbs]\n", m->name,
@@ -220,7 +230,8 @@ static void pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 /* Flush the markq associated to a device transmit queue. Returns 0 if all the
  * packets in the markq were transmitted. A non-zero return code means that the
  * markq has not been emptied. */
-static inline int pspat_txq_flush(struct netdev_queue *txq)
+static inline int
+pspat_txq_flush(struct netdev_queue *txq)
 {
 	struct net_device *dev = txq->dev;
 	int ret = NETDEV_TX_BUSY;
@@ -266,7 +277,8 @@ static inline int pspat_txq_flush(struct netdev_queue *txq)
 	return 1;
 }
 
-static void pspat_txqs_flush(struct list_head *txqs)
+static void
+pspat_txqs_flush(struct list_head *txqs)
 {
 	struct netdev_queue *txq, *txq_next;
 
@@ -280,12 +292,13 @@ static void pspat_txqs_flush(struct list_head *txqs)
 #define PSPAT_ARB_STATS_LOOPS   0x1000
 
 /* Function implementing the arbiter. */
-int pspat_do_arbiter(struct pspat *arb)
+int
+pspat_do_arbiter(struct pspat *arb)
 {
 	int i;
 	u64 now = ktime_get_ns() << 10, picos;
 	struct Qdisc *q = &arb->bypass_qdisc;
-	static u64 last_pspat_rate = 0;
+	static u64 last_pspat_rate;
 	static u64 picos_per_byte = 1;
 	unsigned int nreqs = 0;
 	struct sk_buff *gso_skb = skb_peek(&q->gso_skb);
@@ -318,9 +331,9 @@ int pspat_do_arbiter(struct pspat *arb)
 		struct sk_buff *skb;
 		bool empty = true;
 
-		if (now < pq->arb_extract_next) {
+		if (now < pq->arb_extract_next)
 			continue;
-		}
+
 		pq->arb_extract_next = now + (pspat_arb_interval_ns << 10);
 
 		pspat_arb_prefetch(arb,
@@ -407,9 +420,9 @@ int pspat_do_arbiter(struct pspat *arb)
 				skb->next = skb->prev = NULL;
 			}
 			rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
-			if (unlikely(pspat_debug_xmit)) {
+			if (unlikely(pspat_debug_xmit))
 				printk("enq(%p,%p)-->%d\n", q, skb, rc);
-			}
+
 			if (unlikely(rc)) {
 				/* q->enqueue is starting to drop packets, e.g.
 				 * one internal queue in the qdisc is full. We
@@ -421,20 +434,22 @@ int pspat_do_arbiter(struct pspat *arb)
 				pspat_arb_drain(arb, pq);
 			}
 		}
-		if (to_free) {
+
+		if (to_free)
 			kfree_skb_list(to_free);
-		}
-		if (empty) {
+
+		if (empty)
 			++empty_inqs;
-		}
 	}
-	if (empty_inqs == arb->n_queues) {
+
+	if (empty_inqs == arb->n_queues)
 		pspat_arb_delete_dead_mbs(arb);
-	}
+
 	for (i = 0; i < arb->n_queues; i++) {
 		struct pspat_queue *pq = arb->queues + i;
 		pspat_arb_ack(pq);	/* to clients */
 	}
+
 	for (q = arb->qdiscs; q; q = q->pspat_next) {
 		u64 next_link_idle = q->pspat_next_link_idle;
 		unsigned int ndeq = 0;
@@ -454,10 +469,12 @@ int pspat_do_arbiter(struct pspat *arb)
 
 			if (skb == NULL)
 				break;
+
 			ndeq++;
-			if (unlikely(pspat_debug_xmit)) {
+
+			if (unlikely(pspat_debug_xmit))
 				printk("deq(%p)-->%p\n", q, skb);
-			}
+
 			next_link_idle += picos_per_byte * skb->len;
 
 			if (pspat_single_txq) {	/* possibly override txq */
@@ -517,7 +534,8 @@ int pspat_do_arbiter(struct pspat *arb)
 	return 0;
 }
 
-void pspat_shutdown(struct pspat *arb)
+void
+pspat_shutdown(struct pspat *arb)
 {
 	struct netdev_queue *txq, *txq_next;
 	struct Qdisc *q, **_q;
@@ -572,14 +590,16 @@ void pspat_shutdown(struct pspat *arb)
 	printk("%s: %d qdiscs released\n", __func__, n);
 }
 
-int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
-			 struct net_device *dev, struct netdev_queue *txq)
+int
+pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
+		     struct net_device *dev, struct netdev_queue *txq)
 {
 	int cpu, rc = NET_XMIT_SUCCESS;
 	struct pspat_queue *pq;
 	struct pspat *arb;
+	arb = rcu_dereference(pspat_arb);
 
-	if (!pspat_enable || (arb = rcu_dereference(pspat_arb)) == NULL) {
+	if (!pspat_enable || arb == NULL) {
 		/* Not our business. */
 		return -ENOTTY;
 	}
@@ -600,7 +620,8 @@ int pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 }
 
 /* Called on process exit() to clean-up PSPAT mailbox, if any. */
-void exit_pspat(void)
+void
+exit_pspat(void)
 {
 	struct pspat *arb;
 	struct pspat_queue *pq;
@@ -650,7 +671,8 @@ retry:
 }
 
 /* Body of the dispatcher. */
-int pspat_do_dispatcher(struct pspat_dispatcher *s)
+int
+pspat_do_dispatcher(struct pspat_dispatcher *s)
 {
 	struct pspat_mailbox *m = s->mb;
 	struct sk_buff *skb;
@@ -666,18 +688,17 @@ int pspat_do_dispatcher(struct pspat_dispatcher *s)
 	pspat_mb_clear(m);
 	pspat_txqs_flush(&s->active_txqs);
 
-	if (unlikely(pspat_debug_xmit && ndeq)) {
+	if (unlikely(pspat_debug_xmit && ndeq))
 		printk("PSPAT sender processed %d skbs\n", ndeq);
-	}
 
-	if (pspat_dispatch_sleep_us) {
+	if (pspat_dispatch_sleep_us)
 		usleep_range(pspat_dispatch_sleep_us, pspat_dispatch_sleep_us);
-	}
 
 	return ndeq;
 }
 
-void pspat_dispatcher_shutdown(struct pspat_dispatcher *s)
+void
+pspat_dispatcher_shutdown(struct pspat_dispatcher *s)
 {
 	struct netdev_queue *txq, *txq_next;
 	struct sk_buff *skb;
@@ -700,6 +721,7 @@ void pspat_dispatcher_shutdown(struct pspat_dispatcher *s)
 		 * dangling pointers. */
 		while (txq->pspat_validq_head != NULL) {
 			struct sk_buff *next = txq->pspat_validq_head->next;
+
 			txq->pspat_validq_head->next = NULL;
 			kfree_skb(txq->pspat_validq_head);
 			txq->pspat_validq_head = next;
