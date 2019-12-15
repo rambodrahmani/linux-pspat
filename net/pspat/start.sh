@@ -14,4 +14,3 @@ sudo sysctl net.pspat.enable=1
 
 sudo taskset -pc 7 $(pgrep pspat-arb)
 sudo taskset -pc 3 $(pgrep pspat-snd)
-

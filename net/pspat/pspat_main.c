@@ -16,17 +16,16 @@
 
 #include "pspat.h"
 
-
 DEFINE_MUTEX(pspat_glock);
-struct pspat *pspat_arb;  /* RCU-dereferenced */
-static struct pspat *arbp; /* For internal usage */
+struct pspat *pspat_arb;	/* RCU-dereferenced */
+static struct pspat *arbp;	/* For internal usage */
 
 int pspat_enable __read_mostly = 0;
 int pspat_debug_xmit __read_mostly = 0;
 int pspat_xmit_mode __read_mostly = PSPAT_XMIT_MODE_ARB;
-int pspat_single_txq __read_mostly = 1; /* use only one hw queue */
+int pspat_single_txq __read_mostly = 1;	/* use only one hw queue */
 int pspat_tc_bypass __read_mostly = 0;
-u64 pspat_rate __read_mostly = 40000000000; // 40Gb/s
+u64 pspat_rate __read_mostly = 40000000000;	// 40Gb/s
 u64 pspat_arb_interval_ns __read_mostly = 1000;
 u32 pspat_arb_qdisc_batch __read_mostly = 512;
 u32 pspat_dispatch_batch __read_mostly = 256;
@@ -41,7 +40,7 @@ u64 pspat_arb_loop_max_ns = 0;
 u64 pspat_arb_loop_avg_reqs = 0;
 u64 pspat_mailbox_entries = 512;
 u64 pspat_mailbox_line_size = 128;
-u64 *pspat_rounds; /* currently unused */
+u64 *pspat_rounds;		/* currently unused */
 static int pspat_zero = 0;
 static int pspat_one = 1;
 static int pspat_two = 2;
@@ -51,10 +50,9 @@ static unsigned long pspat_ulongmax = (unsigned long)-1;
 static struct ctl_table_header *pspat_sysctl_hdr;
 static unsigned long pspat_pages;
 
-
 static int
 pspat_enable_proc_handler(struct ctl_table *table, int write,
-			  void __user *buffer, size_t *lenp, loff_t *ppos)
+			  void __user * buffer, size_t * lenp, loff_t * ppos)
 {
 	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 
@@ -70,12 +68,12 @@ pspat_enable_proc_handler(struct ctl_table *table, int write,
 
 static int
 pspat_xmit_mode_proc_handler(struct ctl_table *table, int write,
-			     void __user *buffer, size_t *lenp, loff_t *ppos)
+			     void __user * buffer, size_t * lenp, loff_t * ppos)
 {
 	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 
 	if (ret || !write || !pspat_enable || !arbp
-			|| pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH) {
+	    || pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH) {
 		return ret;
 	}
 
@@ -86,218 +84,232 @@ pspat_xmit_mode_proc_handler(struct ctl_table *table, int write,
 
 static struct ctl_table pspat_static_ctl[] = {
 	{
-		.procname	= "cpu",
-		.mode		= 0444,
-		.child		= NULL, /* created at run-time */
-	},
+	 .procname = "cpu",
+	 .mode = 0444,
+	 .child = NULL,		/* created at run-time */
+	 },
 	{
-		.procname	= "rounds",
-		/* .maxlen	computed at runtime */
-		.mode		= 0444,
-		/* .data	computed at runtime */
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "rounds",
+	 /* .maxlen      computed at runtime */
+	 .mode = 0444,
+	 /* .data        computed at runtime */
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 },
 	{
-		.procname	= "enable",
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.data		= &pspat_enable,
-		.proc_handler	= &pspat_enable_proc_handler,
-		.extra1		= &pspat_zero,
-		.extra2		= &pspat_one,
-	},
+	 .procname = "enable",
+	 .maxlen = sizeof(int),
+	 .mode = 0644,
+	 .data = &pspat_enable,
+	 .proc_handler = &pspat_enable_proc_handler,
+	 .extra1 = &pspat_zero,
+	 .extra2 = &pspat_one,
+	 },
 	{
-		.procname	= "debug_xmit",
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.data		= &pspat_debug_xmit,
-		.proc_handler	= &proc_dointvec_minmax,
-		.extra1		= &pspat_zero,
-		.extra2		= &pspat_one,
-	},
+	 .procname = "debug_xmit",
+	 .maxlen = sizeof(int),
+	 .mode = 0644,
+	 .data = &pspat_debug_xmit,
+	 .proc_handler = &proc_dointvec_minmax,
+	 .extra1 = &pspat_zero,
+	 .extra2 = &pspat_one,
+	 },
 	{
-		.procname	= "xmit_mode",
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.data		= &pspat_xmit_mode,
-		.proc_handler	= &pspat_xmit_mode_proc_handler,
-		.extra1		= &pspat_zero,
-		.extra2		= &pspat_two,
-	},
+	 .procname = "xmit_mode",
+	 .maxlen = sizeof(int),
+	 .mode = 0644,
+	 .data = &pspat_xmit_mode,
+	 .proc_handler = &pspat_xmit_mode_proc_handler,
+	 .extra1 = &pspat_zero,
+	 .extra2 = &pspat_two,
+	 },
 	{
-		.procname	= "single_txq",
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.data		= &pspat_single_txq,
-		.proc_handler	= &proc_dointvec_minmax,
-		.extra1		= &pspat_zero,
-		.extra2		= &pspat_two,
-	},
+	 .procname = "single_txq",
+	 .maxlen = sizeof(int),
+	 .mode = 0644,
+	 .data = &pspat_single_txq,
+	 .proc_handler = &proc_dointvec_minmax,
+	 .extra1 = &pspat_zero,
+	 .extra2 = &pspat_two,
+	 },
 	{
-		.procname	= "tc_bypass",
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.data		= &pspat_tc_bypass,
-		.proc_handler	= &proc_dointvec_minmax,
-		.extra1		= &pspat_zero,
-		.extra2		= &pspat_one,
-	},
+	 .procname = "tc_bypass",
+	 .maxlen = sizeof(int),
+	 .mode = 0644,
+	 .data = &pspat_tc_bypass,
+	 .proc_handler = &proc_dointvec_minmax,
+	 .extra1 = &pspat_zero,
+	 .extra2 = &pspat_one,
+	 },
 	{
-		.procname	= "arb_interval_ns",
-		.maxlen		= sizeof(u64),
-		.mode		= 0644,
-		.data		= &pspat_arb_interval_ns,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "arb_interval_ns",
+	 .maxlen = sizeof(u64),
+	 .mode = 0644,
+	 .data = &pspat_arb_interval_ns,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "arb_qdisc_batch",
-		.maxlen		= sizeof(u32),
-		.mode		= 0644,
-		.data		= &pspat_arb_qdisc_batch,
-		.proc_handler	= &proc_dointvec,
-	},
+	 .procname = "arb_qdisc_batch",
+	 .maxlen = sizeof(u32),
+	 .mode = 0644,
+	 .data = &pspat_arb_qdisc_batch,
+	 .proc_handler = &proc_dointvec,
+	 }
+	,
 	{
-		.procname	= "dispatch_batch",
-		.maxlen		= sizeof(u32),
-		.mode		= 0644,
-		.data		= &pspat_dispatch_batch,
-		.proc_handler	= &proc_dointvec,
-	},
+	 .procname = "dispatch_batch",
+	 .maxlen = sizeof(u32),
+	 .mode = 0644,
+	 .data = &pspat_dispatch_batch,
+	 .proc_handler = &proc_dointvec,
+	 }
+	,
 	{
-		.procname	= "dispatch_sleep_us",
-		.maxlen		= sizeof(u32),
-		.mode		= 0644,
-		.data		= &pspat_dispatch_sleep_us,
-		.proc_handler	= &proc_dointvec,
-	},
+	 .procname = "dispatch_sleep_us",
+	 .maxlen = sizeof(u32),
+	 .mode = 0644,
+	 .data = &pspat_dispatch_sleep_us,
+	 .proc_handler = &proc_dointvec,
+	 }
+	,
 	{
-		.procname	= "rate",
-		.maxlen		= sizeof(u64),
-		.mode		= 0644,
-		.data		= &pspat_rate,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongone,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "rate",
+	 .maxlen = sizeof(u64),
+	 .mode = 0644,
+	 .data = &pspat_rate,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongone,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "arb_tc_enq_drop",
-		.maxlen		= sizeof(u64),
-		.mode		= 0444,
-		.data		= &pspat_arb_tc_enq_drop,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "arb_tc_enq_drop",
+	 .maxlen = sizeof(u64),
+	 .mode = 0444,
+	 .data = &pspat_arb_tc_enq_drop,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "arb_backpressure_drop",
-		.maxlen		= sizeof(u64),
-		.mode		= 0444,
-		.data		= &pspat_arb_backpressure_drop,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "arb_backpressure_drop",
+	 .maxlen = sizeof(u64),
+	 .mode = 0444,
+	 .data = &pspat_arb_backpressure_drop,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "arb_tc_deq",
-		.maxlen		= sizeof(u64),
-		.mode		= 0444,
-		.data		= &pspat_arb_tc_deq,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "arb_tc_deq",
+	 .maxlen = sizeof(u64),
+	 .mode = 0444,
+	 .data = &pspat_arb_tc_deq,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "arb_dispatch_drop",
-		.maxlen		= sizeof(u64),
-		.mode		= 0444,
-		.data		= &pspat_arb_dispatch_drop,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "arb_dispatch_drop",
+	 .maxlen = sizeof(u64),
+	 .mode = 0444,
+	 .data = &pspat_arb_dispatch_drop,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "dispatch_deq",
-		.maxlen		= sizeof(u64),
-		.mode		= 0444,
-		.data		= &pspat_dispatch_deq,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "dispatch_deq",
+	 .maxlen = sizeof(u64),
+	 .mode = 0444,
+	 .data = &pspat_dispatch_deq,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "arb_loop_avg_ns",
-		.maxlen		= sizeof(u64),
-		.mode		= 0444,
-		.data		= &pspat_arb_loop_avg_ns,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "arb_loop_avg_ns",
+	 .maxlen = sizeof(u64),
+	 .mode = 0444,
+	 .data = &pspat_arb_loop_avg_ns,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "arb_loop_max_ns",
-		.maxlen		= sizeof(u64),
-		.mode		= 0444,
-		.data		= &pspat_arb_loop_max_ns,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "arb_loop_max_ns",
+	 .maxlen = sizeof(u64),
+	 .mode = 0444,
+	 .data = &pspat_arb_loop_max_ns,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "arb_loop_avg_reqs",
-		.maxlen		= sizeof(u64),
-		.mode		= 0444,
-		.data		= &pspat_arb_loop_avg_reqs,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "arb_loop_avg_reqs",
+	 .maxlen = sizeof(u64),
+	 .mode = 0444,
+	 .data = &pspat_arb_loop_avg_reqs,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "mailbox_entries",
-		.maxlen		= sizeof(u64),
-		.mode		= 0644,
-		.data		= &pspat_mailbox_entries,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "mailbox_entries",
+	 .maxlen = sizeof(u64),
+	 .mode = 0644,
+	 .data = &pspat_mailbox_entries,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{
-		.procname	= "mailbox_line_size",
-		.maxlen		= sizeof(u64),
-		.mode		= 0644,
-		.data		= &pspat_mailbox_line_size,
-		.proc_handler	= &proc_doulongvec_minmax,
-		.extra1		= &pspat_ulongzero,
-		.extra2		= &pspat_ulongmax,
-	},
+	 .procname = "mailbox_line_size",
+	 .maxlen = sizeof(u64),
+	 .mode = 0644,
+	 .data = &pspat_mailbox_line_size,
+	 .proc_handler = &proc_doulongvec_minmax,
+	 .extra1 = &pspat_ulongzero,
+	 .extra2 = &pspat_ulongmax,
+	 }
+	,
 	{}
 };
 
 static struct ctl_table pspat_root[] = {
 	{
-		.procname	= "pspat",
-		.mode		= 0444,
-		.child		= pspat_static_ctl,
-	},
+	 .procname = "pspat",
+	 .mode = 0444,
+	 .child = pspat_static_ctl,
+	 },
 	{}
 };
 
 static struct ctl_table pspat_parent[] = {
 	{
-		.procname	= "net",
-		.mode		= 0444,
-		.child		= pspat_root,
-	},
+	 .procname = "net",
+	 .mode = 0444,
+	 .child = pspat_root,
+	 },
 	{}
 };
 
 struct pspat_stats *pspat_stats;
 
-static int
-pspat_sysctl_init(void)
+static int pspat_sysctl_init(void)
 {
 	int cpus = num_online_cpus(), i, n;
 	int rc = -ENOMEM;
@@ -306,7 +318,7 @@ pspat_sysctl_init(void)
 	char *name;
 	size_t size, extra_size;
 
-	pspat_stats = (struct pspat_stats*)get_zeroed_page(GFP_KERNEL); // XXX max 4096/32 cpus
+	pspat_stats = (struct pspat_stats *)get_zeroed_page(GFP_KERNEL);	// XXX max 4096/32 cpus
 	if (pspat_stats == NULL) {
 		printk(KERN_WARNING "pspat: unable to allocate stats page");
 		goto out;
@@ -315,14 +327,15 @@ pspat_sysctl_init(void)
 	size = (cpus + 1) * sizeof(u64);
 	pspat_rounds = kzalloc(size, GFP_KERNEL);
 	if (pspat_rounds == NULL) {
-		printk(KERN_WARNING "pspat: unable to allocate rounds counter array\n");
+		printk(KERN_WARNING
+		       "pspat: unable to allocate rounds counter array\n");
 		goto free_stats;
 	}
 	pspat_static_ctl[1].data = pspat_rounds;
 	pspat_static_ctl[1].maxlen = size;
 
-        extra_size = cpus * 16 /* space for the syctl names */,
-	size = extra_size + sizeof(struct ctl_table) * (cpus + 1);
+	extra_size = cpus * 16 /* space for the syctl names */ ,
+	    size = extra_size + sizeof(struct ctl_table) * (cpus + 1);
 	buf = kzalloc(size, GFP_KERNEL);
 	if (buf == NULL) {
 		printk(KERN_WARNING "pspat: unable to allocate sysctls");
@@ -335,20 +348,21 @@ pspat_sysctl_init(void)
 		t = leaves + i;
 
 		n = snprintf(name, extra_size, "inq-drop-%d", i);
-		if (n >= extra_size) { /* truncated */
-			printk(KERN_WARNING "pspat: not enough space for per-cpu sysctl names");
+		if (n >= extra_size) {	/* truncated */
+			printk(KERN_WARNING
+			       "pspat: not enough space for per-cpu sysctl names");
 			goto free_leaves;
 		}
-		t->procname	= name;
+		t->procname = name;
 		name += n + 1;
 		extra_size -= n + 1;
 
-		t->maxlen	= sizeof(unsigned long);
-		t->mode		= 0644;
-		t->data		= &pspat_stats[i].inq_drop;
-		t->proc_handler	= &proc_doulongvec_minmax;
-		t->extra1	= &pspat_ulongzero;
-		t->extra2	= &pspat_ulongmax;
+		t->maxlen = sizeof(unsigned long);
+		t->mode = 0644;
+		t->data = &pspat_stats[i].inq_drop;
+		t->proc_handler = &proc_doulongvec_minmax;
+		t->extra1 = &pspat_ulongzero;
+		t->extra2 = &pspat_ulongmax;
 	}
 	pspat_static_ctl[0].child = leaves;
 	pspat_sysctl_hdr = register_sysctl_table(pspat_parent);
@@ -365,8 +379,7 @@ out:
 	return rc;
 }
 
-static void
-pspat_sysctl_fini(void)
+static void pspat_sysctl_fini(void)
 {
 	if (pspat_sysctl_hdr)
 		unregister_sysctl_table(pspat_sysctl_hdr);
@@ -379,12 +392,10 @@ pspat_sysctl_fini(void)
 }
 
 /* Hook exported by net/core/dev.c */
-extern int (*pspat_handler)(struct sk_buff *, struct Qdisc *,
-			    struct net_device *,
-			    struct netdev_queue *);
+extern int (*pspat_handler) (struct sk_buff *, struct Qdisc *,
+			     struct net_device *, struct netdev_queue *);
 
-static int
-arb_worker_func(void *data)
+static int arb_worker_func(void *data)
 {
 	struct pspat *arb = (struct pspat *)data;
 	bool arb_registered = false;
@@ -392,8 +403,8 @@ arb_worker_func(void *data)
 	while (!kthread_should_stop()) {
 		if (!pspat_enable) {
 			if (arb_registered) {
-                                /* PSPAT is disabled but arbiter is still
-                                 * registered: we need to unregister. */
+				/* PSPAT is disabled but arbiter is still
+				 * registered: we need to unregister. */
 				mutex_lock(&pspat_glock);
 				pspat_shutdown(arb);
 				rcu_assign_pointer(pspat_arb, NULL);
@@ -409,7 +420,7 @@ arb_worker_func(void *data)
 		} else {
 			if (!arb_registered) {
 				/* PSPAT is enabled but arbiter is not
-                                 * registered: we need to register. */
+				 * registered: we need to register. */
 				mutex_lock(&pspat_glock);
 				rcu_assign_pointer(pspat_arb, arb);
 				synchronize_rcu();
@@ -433,14 +444,13 @@ arb_worker_func(void *data)
 	return 0;
 }
 
-static int
-snd_worker_func(void *data)
+static int snd_worker_func(void *data)
 {
 	struct pspat_dispatcher *s = (struct pspat_dispatcher *)data;
 
 	while (!kthread_should_stop()) {
 		if (pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH
-						|| !pspat_enable) {
+		    || !pspat_enable) {
 			printk("PSPAT dispatcher deactivated\n");
 			pspat_dispatcher_shutdown(s);
 			set_current_state(TASK_INTERRUPTIBLE);
@@ -459,8 +469,7 @@ snd_worker_func(void *data)
 	return 0;
 }
 
-static int
-pspat_destroy(void)
+static int pspat_destroy(void)
 {
 	mutex_lock(&pspat_glock);
 	BUG_ON(arbp == NULL);
@@ -489,8 +498,7 @@ pspat_destroy(void)
 	return 0;
 }
 
-int
-pspat_create_client_queue(void)
+int pspat_create_client_queue(void)
 {
 	struct pspat_mailbox *m;
 	char name[PSPAT_MB_NAMSZ];
@@ -508,13 +516,13 @@ pspat_create_client_queue(void)
 }
 
 static int
-pspat_bypass_enqueue(struct sk_buff *skb, struct Qdisc *q, struct sk_buff **to_free)
+pspat_bypass_enqueue(struct sk_buff *skb, struct Qdisc *q,
+		     struct sk_buff **to_free)
 {
 	return qdisc_enqueue_tail(skb, q);
 }
 
-static struct sk_buff *
-pspat_bypass_dequeue(struct Qdisc *q)
+static struct sk_buff *pspat_bypass_dequeue(struct Qdisc *q)
 {
 	return qdisc_dequeue_head(q);
 }
@@ -522,8 +530,7 @@ pspat_bypass_dequeue(struct Qdisc *q)
 static struct lock_class_key qdisc_tx_busylock;
 static struct lock_class_key qdisc_running_key;
 
-static int
-pspat_create(void)
+static int pspat_create(void)
 {
 	int cpus = num_online_cpus(), i;
 	int dispatchers = 1;
@@ -541,11 +548,13 @@ pspat_create(void)
 	BUG_ON(arbp != NULL);
 
 	arb_size = roundup(sizeof(*arbp) + cpus * sizeof(*arbp->queues),
-				INTERNODE_CACHE_BYTES);
+			   INTERNODE_CACHE_BYTES);
 	pspat_pages = DIV_ROUND_UP(arb_size + mb_size * (cpus + dispatchers),
-				PAGE_SIZE);
+				   PAGE_SIZE);
 
-	arbp = (struct pspat *)__get_free_pages(GFP_KERNEL, order_base_2(pspat_pages));
+	arbp =
+	    (struct pspat *)__get_free_pages(GFP_KERNEL,
+					     order_base_2(pspat_pages));
 	if (!arbp) {
 		mutex_unlock(&pspat_glock);
 		return -ENOMEM;
@@ -559,7 +568,7 @@ pspat_create(void)
 		char name[PSPAT_MB_NAMSZ];
 		snprintf(name, PSPAT_MB_NAMSZ, "CL-%d", i);
 		ret = pspat_mb_init(m, name, mb_entries, mb_line_size);
-		if (ret ) {
+		if (ret) {
 			goto fail;
 		}
 		arbp->queues[i].inq = m;
@@ -573,7 +582,7 @@ pspat_create(void)
 		char name[PSPAT_MB_NAMSZ];
 		snprintf(name, PSPAT_MB_NAMSZ, "T-%d", i);
 		ret = pspat_mb_init(m, name, mb_entries, mb_line_size);
-		if (ret ) {
+		if (ret) {
 			goto fail;
 		}
 		arbp->dispatchers[i].mb = m;
@@ -626,8 +635,7 @@ fail:
 	return ret;
 }
 
-static int __init
-pspat_init(void)
+static int __init pspat_init(void)
 {
 	int ret;
 
@@ -650,8 +658,7 @@ err1:
 	return ret;
 }
 
-static void __exit
-pspat_fini(void)
+static void __exit pspat_fini(void)
 {
 	pspat_destroy();
 	pspat_sysctl_fini();
@@ -664,4 +671,3 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Giuseppe Lettieri <g.lettieri@iet.unipi.it");
 MODULE_AUTHOR("Vincenzo Maffione <v.maffione@gmail.com>");
 MODULE_AUTHOR("Luigi Rizzo <rizzo@iet.unipi.it>");
-
