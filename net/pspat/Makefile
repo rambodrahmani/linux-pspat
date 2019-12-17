@@ -1,7 +1,4 @@
-################################################################################
-# File: Makefile
-#       Used to build mailbox_test.c as standalone.
-################################################################################
+# Makefile used to build mailbox_test.c as standalone.
 
 CC=gcc
 CFLAGS=-Wall
