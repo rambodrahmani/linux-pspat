@@ -397,7 +397,7 @@ static int arb_worker_func(void *data)
 				synchronize_rcu();
 				mutex_unlock(&pspat_glock);
 				arb_registered = false;
-				printk("PSPAT arbiter unregistered\n");
+				printk(KERN_INFO "PSPAT arbiter unregistered\n");
 			}
 
 			set_current_state(TASK_INTERRUPTIBLE);
@@ -412,7 +412,7 @@ static int arb_worker_func(void *data)
 				synchronize_rcu();
 				mutex_unlock(&pspat_glock);
 				arb_registered = true;
-				printk("PSPAT arbiter registered\n");
+				printk(KERN_INFO "PSPAT arbiter registered\n");
 				arb->last_ts = ktime_get_ns() << 10;
 				arb->num_loops = 0;
 				arb->num_picos = 0;
@@ -437,11 +437,11 @@ static int snd_worker_func(void *data)
 	while (!kthread_should_stop()) {
 		if (pspat_xmit_mode != PSPAT_XMIT_MODE_DISPATCH
 		    || !pspat_enable) {
-			printk("PSPAT dispatcher deactivated\n");
+			printk(KERN_INFO "PSPAT dispatcher deactivated\n");
 			pspat_dispatcher_shutdown(s);
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule();
-			printk("PSPAT dispatcher activated\n");
+			printk(KERN_INFO "PSPAT dispatcher activated\n");
 
 		} else {
 			pspat_do_dispatcher(s);
@@ -478,7 +478,7 @@ static int pspat_destroy(void)
 	free_pages((unsigned long)arbp, order_base_2(pspat_pages));
 	arbp = NULL;
 
-	printk("PSPAT arbiter destroyed\n");
+	printk(KERN_INFO "PSPAT arbiter destroyed\n");
 	mutex_unlock(&pspat_glock);
 
 	return 0;
@@ -602,7 +602,7 @@ static int pspat_create(void)
 		goto fail2;
 	}
 
-	printk("PSPAT arbiter created with %d per-core queues\n",
+	printk(KERN_INFO "PSPAT arbiter created with %d per-core queues\n",
 	       arbp->n_queues);
 
 	mutex_unlock(&pspat_glock);
@@ -627,13 +627,13 @@ static int __init pspat_init(void)
 
 	ret = pspat_sysctl_init();
 	if (ret) {
-		printk("pspat_sysctl_init() failed\n");
+		printk(KERN_INFO "pspat_sysctl_init() failed\n");
 		return ret;
 	}
 
 	ret = pspat_create();
 	if (ret) {
-		printk("Failed to create arbiter\n");
+		printk(KERN_INFO "Failed to create arbiter\n");
 		goto err1;
 	}
 
