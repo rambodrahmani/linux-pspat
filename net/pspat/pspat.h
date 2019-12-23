@@ -100,6 +100,6 @@ extern struct pspat_stats *pspat_stats;
 
 struct pspat_stats {
 	unsigned long inq_drop;
-} __attribute__ ((aligned(32)));
+} __aligned(32);
 
 #endif /* __PSPAT_H__ */
