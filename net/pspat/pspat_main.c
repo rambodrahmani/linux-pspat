@@ -54,7 +54,7 @@ static unsigned long pspat_pages;
 
 static int
 pspat_enable_proc_handler(struct ctl_table *table, int write,
-			  void __user * buffer, size_t * lenp, loff_t * ppos)
+				void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 
@@ -70,7 +70,7 @@ pspat_enable_proc_handler(struct ctl_table *table, int write,
 
 static int
 pspat_xmit_mode_proc_handler(struct ctl_table *table, int write,
-			     void __user * buffer, size_t * lenp, loff_t * ppos)
+				void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 
