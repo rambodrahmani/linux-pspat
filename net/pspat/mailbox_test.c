@@ -158,6 +158,7 @@ static int test3(struct pspat_mailbox *mb, unsigned int entries)
 static int test4(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int n = mb_fill(mb);
+
 	EXPECT_EQ(n, entries - mb->line_entries);
 	EXPECT_FALSE(pspat_mb_empty(mb));
 	EXPECT_FAIL(pspat_mb_insert(mb, /*value= */ mb - 1));
@@ -174,6 +175,7 @@ static int test5(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int n = mb_fill(mb);
+
 	EXPECT_EQ(n, maxn);
 	n = mb_drain(mb);
 	EXPECT_EQ(n, maxn);
@@ -190,6 +192,7 @@ static int test6(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int n = mb_fill(mb);
+
 	EXPECT_EQ(n, maxn);
 	n = mb_drain(mb);
 	EXPECT_EQ(n, maxn);
@@ -205,6 +208,7 @@ static int test7(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int n = mb_fill(mb);
+
 	EXPECT_EQ(n, maxn);
 	n = mb_drain(mb);
 	EXPECT_EQ(n, maxn);
@@ -228,6 +232,7 @@ static int test8(struct pspat_mailbox *mb, unsigned int entries)
 
 	for (i = 0; i < arbitrary_num_cycles; i++) {
 		int n = mb_fill(mb);
+
 		EXPECT_EQ(n, maxn);
 		n = mb_drain(mb);
 		EXPECT_EQ(n, maxn);
@@ -288,6 +293,7 @@ static int test10(struct pspat_mailbox *mb, unsigned int entries)
 	for (track = 0, n_iterations = 0; track + arbitrary_inc <= maxn;
 	     n_iterations++) {
 		int n = mb_fill_limit(mb, arbitrary_inc);
+
 		EXPECT_EQ(n, arbitrary_inc);
 		track += n;
 		n = mb_drain_limit(mb, arbitrary_dec);
@@ -315,14 +321,15 @@ static int test11(struct pspat_mailbox *mb, unsigned int entries)
 	for (i = 0; i < arbitrary_num_cycles; i++) {
 		/* Insert 1. */
 		int n = mb_fill_limit(mb, 1);
+
 		EXPECT_EQ(n, 1);
 		/* Drain at least 2, checking that we get one. */
 		n = mb_drain_limit(mb, 2);
 		EXPECT_EQ(n, 1);
 		if ((i % maxn == maxn / 3) || (i % maxn == maxn * 2 / 3)) {
-			/* Clear once every maxn items, in the
-			 * middle of processing, making sure we
-			 * never run out of slots. */
+			/* Clear once every maxn items, in the */
+			/* middle of processing, making sure we */
+			/* never run out of slots. */
 			pspat_mb_clear(mb);
 		}
 	}
@@ -340,7 +347,7 @@ static testfunc_t tests[] = { test1, test2, test3, test4, test5, test6,
 /**
  * Developer harness test.
  */
-int main( int argc, const char* argv[] )
+int main(int argc, const char *argv[])
 {
 	const unsigned int entries = 512;
 	const unsigned int line_size = 128;
