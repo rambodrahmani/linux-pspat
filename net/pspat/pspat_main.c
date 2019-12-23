@@ -320,7 +320,7 @@ static int pspat_sysctl_init(void)
 	pspat_static_ctl[1].data = pspat_rounds;
 	pspat_static_ctl[1].maxlen = size;
 
-	extra_size = cpus * 16 /* space for the syctl names */ ,
+	extra_size = cpus * 16 /* space for the syctl names */,
 	    size = extra_size + sizeof(struct ctl_table) * (cpus + 1);
 	buf = kzalloc(size, GFP_KERNEL);
 	if (buf == NULL) {
@@ -378,8 +378,8 @@ static void pspat_sysctl_fini(void)
 }
 
 /* Hook exported by net/core/dev.c */
-extern int (*pspat_handler) (struct sk_buff *, struct Qdisc *,
-			     struct net_device *, struct netdev_queue *);
+extern int (*pspat_handler) (struct sk_buff*, struct Qdisc*,
+				struct net_device*, struct netdev_queue*);
 
 static int arb_worker_func(void *data)
 {
