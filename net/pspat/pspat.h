@@ -10,10 +10,10 @@ struct pspat_queue {
 	struct pspat_mailbox *inq;
 
 	/* client fields */
-	 START_NEW_CACHELINE u64 cli_last_mb;
+	START_NEW_CACHELINE u64 cli_last_mb;
 
 	/* arbiter fields */
-	 START_NEW_CACHELINE u64 arb_extract_next;
+	START_NEW_CACHELINE u64 arb_extract_next;
 	struct pspat_mailbox *arb_last_mb;
 	struct list_head mb_to_clear;
 };

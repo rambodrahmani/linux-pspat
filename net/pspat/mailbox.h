@@ -29,16 +29,16 @@ struct pspat_mailbox {
 	u64 identifier;
 
 	/* producer fields */
-	 START_NEW_CACHELINE unsigned long prod_write;
+	START_NEW_CACHELINE unsigned long prod_write;
 	unsigned long prod_check;
 
 	/* consumer fields */
-	 START_NEW_CACHELINE unsigned long cons_clear;
+	START_NEW_CACHELINE unsigned long cons_clear;
 	unsigned long cons_read;
 	struct list_head list;
 
 	/* the queue */
-	 START_NEW_CACHELINE uintptr_t q[0];
+	START_NEW_CACHELINE uintptr_t q[0];
 };
 
 /**

@@ -19,8 +19,7 @@ static atomic_t mb_next_id = ATOMIC_INIT(0);
  * push a new packet to the client queue
  * returns -ENOBUFS if the queue is full
  */
-static int
-pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
+static int pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 {
 	struct pspat_mailbox *m;
 	int err;
@@ -56,8 +55,7 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 	return 0;
 }
 
-static void
-pspat_cli_delete(struct pspat *arb, struct pspat_mailbox *m)
+static void pspat_cli_delete(struct pspat *arb, struct pspat_mailbox *m)
 {
 	int i;
 	/* remove m from all the client lists current-mb pointers */
@@ -124,8 +122,7 @@ retry:
 	return skb;
 }
 
-static inline void
-pspat_arb_prefetch(struct pspat *arb, struct pspat_queue *pq)
+static inline void pspat_arb_prefetch(struct pspat *arb, struct pspat_queue *pq)
 {
 	if (pq->arb_last_mb != NULL)
 		pspat_mb_prefetch(pq->arb_last_mb);
@@ -151,8 +148,7 @@ pspat_mark(struct list_head *active_queues, struct sk_buff *skb)
 }
 
 /* move skb to the a sender queue */
-static int
-pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
+static int pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
 {
 	struct pspat_dispatcher *s = &arb->dispatchers[0];
 	int err;
@@ -181,8 +177,7 @@ pspat_arb_dispatch(struct pspat *arb, struct sk_buff *skb)
 
 /* Zero out the used skbs in the client mailboxes and the
  * client lists. */
-static void
-pspat_arb_ack(struct pspat_queue *pq)
+static void pspat_arb_ack(struct pspat_queue *pq)
 {
 	struct pspat_mailbox *mb_cursor, *mb_next;
 
@@ -193,8 +188,7 @@ pspat_arb_ack(struct pspat_queue *pq)
 }
 
 /* delete all known dead mailboxes */
-static void
-pspat_arb_delete_dead_mbs(struct pspat *arb)
+static void pspat_arb_delete_dead_mbs(struct pspat *arb)
 {
 	struct pspat_mailbox *mb_cursor, *mb_next;
 
@@ -204,8 +198,7 @@ pspat_arb_delete_dead_mbs(struct pspat *arb)
 	}
 }
 
-static void
-pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
+static void pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 {
 	struct pspat_mailbox *m = pq->arb_last_mb;
 	struct sk_buff *skb;
@@ -230,8 +223,7 @@ pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 /* Flush the markq associated to a device transmit queue. Returns 0 if all the
  * packets in the markq were transmitted. A non-zero return code means that the
  * markq has not been emptied. */
-static inline int
-pspat_txq_flush(struct netdev_queue *txq)
+static inline int pspat_txq_flush(struct netdev_queue *txq)
 {
 	struct net_device *dev = txq->dev;
 	int ret = NETDEV_TX_BUSY;
@@ -277,8 +269,7 @@ pspat_txq_flush(struct netdev_queue *txq)
 	return 1;
 }
 
-static void
-pspat_txqs_flush(struct list_head *txqs)
+static void pspat_txqs_flush(struct list_head *txqs)
 {
 	struct netdev_queue *txq, *txq_next;
 
@@ -292,8 +283,7 @@ pspat_txqs_flush(struct list_head *txqs)
 #define PSPAT_ARB_STATS_LOOPS   0x1000
 
 /* Function implementing the arbiter. */
-int
-pspat_do_arbiter(struct pspat *arb)
+int pspat_do_arbiter(struct pspat *arb)
 {
 	int i;
 	u64 now = ktime_get_ns() << 10, picos;
@@ -534,8 +524,7 @@ pspat_do_arbiter(struct pspat *arb)
 	return 0;
 }
 
-void
-pspat_shutdown(struct pspat *arb)
+void pspat_shutdown(struct pspat *arb)
 {
 	struct netdev_queue *txq, *txq_next;
 	struct Qdisc *q, **_q;
@@ -620,8 +609,7 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 }
 
 /* Called on process exit() to clean-up PSPAT mailbox, if any. */
-void
-exit_pspat(void)
+void exit_pspat(void)
 {
 	struct pspat *arb;
 	struct pspat_queue *pq;
@@ -671,8 +659,7 @@ retry:
 }
 
 /* Body of the dispatcher. */
-int
-pspat_do_dispatcher(struct pspat_dispatcher *s)
+int pspat_do_dispatcher(struct pspat_dispatcher *s)
 {
 	struct pspat_mailbox *m = s->mb;
 	struct sk_buff *skb;
@@ -697,8 +684,7 @@ pspat_do_dispatcher(struct pspat_dispatcher *s)
 	return ndeq;
 }
 
-void
-pspat_dispatcher_shutdown(struct pspat_dispatcher *s)
+void pspat_dispatcher_shutdown(struct pspat_dispatcher *s)
 {
 	struct netdev_queue *txq, *txq_next;
 	struct sk_buff *skb;
