@@ -33,12 +33,13 @@ pspat_cli_push(struct pspat_queue *pq, struct sk_buff *skb)
 	}
 	m = current->pspat_mb;
 
-	/* The backpressure flag set tells us that the qdisc is being overrun. */
+	/* The backpressure flag set tells us that the qdisc is being */
+	/* overrun. */
 	/* We return an error to propagate the overrun to the client. */
 	if (unlikely(m->backpressure)) {
 		m->backpressure = 0;
 		if (pspat_debug_xmit)
-			printk(KERN_DEBUG "mailbox %p backpressure\n", m);
+			pr_debug("mailbox %p backpressure\n", m);
 		return -ENOBUFS;
 	}
 
@@ -220,16 +221,16 @@ pspat_arb_drain(struct pspat *arb, struct pspat_queue *pq)
 		m->backpressure = 1;
 
 	if (unlikely(pspat_debug_xmit)) {
-		printk(KERN_DEBUG "PSPAT drained mailbox %s [%d skbs]\n",
+		pr_debug("PSPAT drained mailbox %s [%d skbs]\n",
 			m->name,
 			dropped);
 	}
 	pspat_arb_backpressure_drop += dropped;
 }
 
-/* Flush the markq associated to a device transmit queue. Returns 0 if all the */
-/* packets in the markq were transmitted. A non-zero return code means that the */
-/* markq has not been emptied. */
+/* Flush the markq associated to a device transmit queue. Returns 0 if all */
+/* the packets in the markq were transmitted. A non-zero return code means */
+/* that the markq has not been emptied. */
 static inline int
 pspat_txq_flush(struct netdev_queue *txq)
 {
@@ -342,7 +343,8 @@ pspat_do_arbiter(struct pspat *arb)
 			++nreqs;
 			if (!pspat_tc_bypass) {
 				/* the client chose the txq before sending */
-				/* the skb to us, so we only need to recover it*/
+				/* the skb to us, so we only need to recover */
+				/* it */
 				struct net_device *dev = skb->dev;
 				struct netdev_queue *txq;
 
@@ -362,11 +364,11 @@ pspat_do_arbiter(struct pspat *arb)
 				spin_unlock(qdisc_lock(q));
 
 				if (!can_steal) {
-					if (unlikely(pspat_debug_xmit)) {
-						printk("Cannot steal qdisc %p \n",
-						     q);
-					}
-					/* qdisc already running, we have to skip it */
+					if (unlikely(pspat_debug_xmit))
+						pr_debug("Cannot steal qdisc %p\n", q);
+
+					/* qdisc already running, */
+					/* we have to skip it */
 					kfree_skb(skb);
 					continue;
 				}
@@ -378,6 +380,7 @@ pspat_do_arbiter(struct pspat *arb)
 					q->q.qlen--;
 					j++;
 				}
+
 				if (skb_bad_txq) {
 					kfree_skb(skb_bad_txq);
 					skb_bad_txq = NULL;
@@ -385,17 +388,18 @@ pspat_do_arbiter(struct pspat *arb)
 					q->q.qlen--;
 					j++;
 				}
+
 				while ((oskb = q->dequeue(q))) {
 					kfree_skb(oskb);
 					j++;
 				}
-				printk(KERN_DEBUG "Stolen qdisc %p, drained %d skbs\n",
+				pr_debug("Stolen qdisc %p, drained %d skbs\n",
 					q, j);
 
 				/* add to the list of all the Qdiscs we serve */
 				/* and initialize the PSPAT-specific fields. */
-				/* We leave the QDISC_RUNNING bit set to trick */
-				/* the system into ignoring the Qdisc */
+				/* We leave the QDISC_RUNNING bit set to */
+				/* trick the system into ignoring the Qdisc */
 				q->pspat_owned = 1;
 				q->pspat_next = arb->qdiscs;
 				arb->qdiscs = q;
@@ -406,20 +410,21 @@ pspat_do_arbiter(struct pspat *arb)
 			}
 
 			if (unlikely(skb->next)) {
-				printk(KERN_DEBUG "WARNING: skb->next was not NULL\n");
+				pr_debug("WARNING: skb->next was not NULL\n");
 				skb->next = skb->prev = NULL;
 			}
 			rc = q->enqueue(skb, q, &to_free) & NET_XMIT_MASK;
 			if (unlikely(pspat_debug_xmit))
-				printk(KERN_DEBUG "enq(%p,%p)-->%d\n", q, skb, rc);
+				pr_debug("enq(%p,%p)-->%d\n", q, skb, rc);
 
 			if (unlikely(rc)) {
-				/* q->enqueue is starting to drop packets, e.g. */
-				/* one internal queue in the qdisc is full. We */
-				/* would like to propagate this signal to the */
-				/* client, so we set the backpressure flag. We */
-				/* also drain the mailbox because it may not be */
-				/* anymore in the clients list. */
+				/* q->enqueue is starting to drop packets, */
+				/* e.g. one internal queue in the qdisc is */
+				/* full. We would like to propagate this */
+				/* signal to the client, so we set the */
+				/* backpressure flag. We also drain the */
+				/* mailbox because it may not be anymore in */
+				/* the clients list. */
 				pspat_arb_tc_enq_drop++;
 				pspat_arb_drain(arb, pq);
 			}
@@ -463,7 +468,7 @@ pspat_do_arbiter(struct pspat *arb)
 			ndeq++;
 
 			if (unlikely(pspat_debug_xmit))
-				printk(KERN_DEBUG "deq(%p)-->%p\n", q, skb);
+				pr_debug("deq(%p)-->%p\n", q, skb);
 
 			next_link_idle += picos_per_byte * skb->len;
 
@@ -543,7 +548,7 @@ pspat_shutdown(struct pspat *arb)
 			n++;
 		}
 	}
-	printk("%s: CMs drained, found %d skbs\n", __func__, n);
+	pr_info("%s: CMs drained, found %d skbs\n", __func__, n);
 
 	/* Also drain the validq of all the active tx queues. */
 	n = 0;
@@ -565,8 +570,8 @@ pspat_shutdown(struct pspat *arb)
 		BUG_ON(txq->pspat_markq_head != NULL ||
 		       txq->pspat_markq_tail != NULL);
 	}
-	printk(KERN_DEBUG "%s: Arbiter validq lists drained, found %d skbs\n", __func__,
-	       n);
+	pr_debug("%s: Arbiter validq lists drained, found %d skbs\n",
+		__func__, n);
 
 	/* Return all the stolen qdiscs. */
 	for (n = 0, _q = &arb->qdiscs, q = *_q; q; _q = &q->pspat_next, q = *_q) {
@@ -577,7 +582,7 @@ pspat_shutdown(struct pspat *arb)
 		*_q = NULL;
 		n++;
 	}
-	printk(KERN_DEBUG "%s: %d qdiscs released\n", __func__, n);
+	pr_debug("%s: %d qdiscs released\n", __func__, n);
 }
 
 int
@@ -587,6 +592,7 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 	int cpu, rc = NET_XMIT_SUCCESS;
 	struct pspat_queue *pq;
 	struct pspat *arb;
+
 	arb = rcu_dereference(pspat_arb);
 
 	if (!pspat_enable || arb == NULL) {
@@ -603,9 +609,9 @@ pspat_client_handler(struct sk_buff *skb, struct Qdisc *q,
 		rc = NET_XMIT_DROP;
 	}
 	put_cpu();
-	if (unlikely(pspat_debug_xmit)) {
-		printk(KERN_DEBUG "cli_push(%p) --> %d\n", skb, rc);
-	}
+	if (unlikely(pspat_debug_xmit))
+		pr_debug("cli_push(%p) --> %d\n", skb, rc);
+
 	return rc;
 }
 
@@ -631,9 +637,9 @@ retry:
 		 */
 		cpu = get_cpu();
 		pq = arb->queues + cpu;
-		if (pspat_mb_insert(pq->inq, current->pspat_mb) == 0) {
+		if (pspat_mb_insert(pq->inq, current->pspat_mb) == 0)
 			current->pspat_mb = NULL;
-		}
+
 		put_cpu();
 	}
 	rcu_read_unlock();
@@ -643,7 +649,7 @@ retry:
 			/* We failed to push PSPAT_LAST_SKB but the
 			 * arbiter was running. We must try again.
 			 */
-			printk(KERN_DEBUG "PSPAT Try again to destroy mailbox\n");
+			pr_debug("PSPAT Try again to destroy mailbox\n");
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule_timeout(100);
 			goto retry;
@@ -677,7 +683,7 @@ int pspat_do_dispatcher(struct pspat_dispatcher *s)
 	pspat_txqs_flush(&s->active_txqs);
 
 	if (unlikely(pspat_debug_xmit && ndeq))
-		printk(KERN_DEBUG "PSPAT sender processed %d skbs\n", ndeq);
+		pr_debug("PSPAT sender processed %d skbs\n", ndeq);
 
 	if (pspat_dispatch_sleep_us)
 		usleep_range(pspat_dispatch_sleep_us, pspat_dispatch_sleep_us);
@@ -696,16 +702,16 @@ void pspat_dispatcher_shutdown(struct pspat_dispatcher *s)
 		kfree_skb(skb);
 		n++;
 	}
-	printk(KERN_DEBUG "%s: Sender MB drained, found %d skbs\n", __func__, n);
+	pr_debug("%s: Sender MB drained, found %d skbs\n", __func__, n);
 
 	/* Also drain the validq of all the active tx queues. */
 	n = 0;
 	list_for_each_entry_safe(txq, txq_next, &s->active_txqs, pspat_active) {
-		/* We can't call kfree_skb_list(), because this function does
-		 * not unlink the skbuffs from the list.
-		 * Unlinking is important in case the refcount of some of the
-		 * skbuffs does not go to zero here, that would mean possible
-		 * dangling pointers. */
+		/* We can't call kfree_skb_list(), because this function does */
+		/* not unlink the skbuffs from the list. */
+		/* Unlinking is important in case the refcount of some of the */
+		/* skbuffs does not go to zero here, that would mean possible */
+		/* dangling pointers. */
 		while (txq->pspat_validq_head != NULL) {
 			struct sk_buff *next = txq->pspat_validq_head->next;
 
@@ -719,5 +725,6 @@ void pspat_dispatcher_shutdown(struct pspat_dispatcher *s)
 		BUG_ON(txq->pspat_markq_head != NULL ||
 		       txq->pspat_markq_tail != NULL);
 	}
-	printk(KERN_DEBUG "%s: Sender validq lists drained, found %d skbs\n", __func__, n);
+	pr_debug("%s: Sender validq lists drained, found %d skbs\n",
+		__func__, n);
 }
