@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0+
+/* SPDX-License-Identifier: GPL-2.0+ */
 
 #ifndef __PSPAT_H__
 #define __PSPAT_H__
@@ -7,8 +7,8 @@
 
 /* per-cpu data structure */
 struct pspat_queue {
-	/* Input queue, a mailbox of mailbox pointers.
-	 * written by clients, read by the arbiter. */
+	/* Input queue, a mailbox of mailbox pointers. */
+	/* written by clients, read by the arbiter. */
 	struct pspat_mailbox *inq;
 
 	/* client fields */
@@ -46,12 +46,12 @@ struct pspat {
 	u64 num_picos;
 	u64 last_ts;
 
-	/* list of all netdev_queue on which we are actively
-	 * transmitting */
+	/* list of all netdev_queue on which we are actively */
+	/* transmitting */
 	struct list_head active_txqs;
 
-	/* mailboxes between the arbiter and the dispatchers
-	 * (used with PSPAT_XMIT_MODE_DISPATCH) */
+	/* mailboxes between the arbiter and the dispatchers */
+	/* (used with PSPAT_XMIT_MODE_DISPATCH) */
 	struct pspat_dispatcher dispatchers[1];
 
 	/* mailboxes between clients and the arbiter */
@@ -75,9 +75,9 @@ int pspat_create_client_queue(void);
 
 extern int pspat_enable;
 extern int pspat_debug_xmit;
-#define PSPAT_XMIT_MODE_ARB		0	/* packets sent by the arbiter */
-#define PSPAT_XMIT_MODE_DISPATCH	1	/* packets sent by dispatcher */
-#define PSPAT_XMIT_MODE_MAX		2	/* packets dropped by the arbiter */
+#define PSPAT_XMIT_MODE_ARB		0   /* packets sent by the arbiter */
+#define PSPAT_XMIT_MODE_DISPATCH	1   /* packets sent by dispatcher */
+#define PSPAT_XMIT_MODE_MAX		2   /* packets dropped by the arbiter */
 extern int pspat_xmit_mode;
 extern int pspat_tc_bypass;
 extern int pspat_single_txq;

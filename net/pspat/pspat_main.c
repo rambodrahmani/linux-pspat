@@ -22,31 +22,31 @@ DEFINE_MUTEX(pspat_glock);
 struct pspat *pspat_arb;	/* RCU-dereferenced */
 static struct pspat *arbp;	/* For internal usage */
 
-int pspat_enable __read_mostly = 0;
-int pspat_debug_xmit __read_mostly = 0;
+int pspat_enable __read_mostly;
+int pspat_debug_xmit __read_mostly;
 int pspat_xmit_mode __read_mostly = PSPAT_XMIT_MODE_ARB;
 int pspat_single_txq __read_mostly = 1;	/* use only one hw queue */
-int pspat_tc_bypass __read_mostly = 0;
+int pspat_tc_bypass __read_mostly;
 u64 pspat_rate __read_mostly = 40000000000;	// 40Gb/s
 u64 pspat_arb_interval_ns __read_mostly = 1000;
 u32 pspat_arb_qdisc_batch __read_mostly = 512;
 u32 pspat_dispatch_batch __read_mostly = 256;
-u32 pspat_dispatch_sleep_us __read_mostly = 0;
-u64 pspat_arb_tc_enq_drop = 0;
-u64 pspat_arb_backpressure_drop = 0;
-u64 pspat_arb_tc_deq = 0;
-u64 pspat_arb_dispatch_drop = 0;
-u64 pspat_dispatch_deq = 0;
-u64 pspat_arb_loop_avg_ns = 0;
-u64 pspat_arb_loop_max_ns = 0;
-u64 pspat_arb_loop_avg_reqs = 0;
+u32 pspat_dispatch_sleep_us __read_mostly;
+u64 pspat_arb_tc_enq_drop;
+u64 pspat_arb_backpressure_drop;
+u64 pspat_arb_tc_deq;
+u64 pspat_arb_dispatch_drop;
+u64 pspat_dispatch_deq;
+u64 pspat_arb_loop_avg_ns;
+u64 pspat_arb_loop_max_ns;
+u64 pspat_arb_loop_avg_reqs;
 u64 pspat_mailbox_entries = 512;
 u64 pspat_mailbox_line_size = 128;
 u64 *pspat_rounds;		/* currently unused */
-static int pspat_zero = 0;
+static int pspat_zero;
 static int pspat_one = 1;
 static int pspat_two = 2;
-static unsigned long pspat_ulongzero = 0UL;
+static unsigned long pspat_ulongzero;
 static unsigned long pspat_ulongone = 1UL;
 static unsigned long pspat_ulongmax = (unsigned long)-1;
 static struct ctl_table_header *pspat_sysctl_hdr;
