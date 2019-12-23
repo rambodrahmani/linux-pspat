@@ -58,9 +58,8 @@ pspat_enable_proc_handler(struct ctl_table *table, int write,
 {
 	int ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 
-	if (ret || !write || !pspat_enable || !arbp) {
+	if (ret || !write || !pspat_enable || !arbp)
 		return ret;
-	}
 
 	wake_up_process(arbp->arb_task);
 	wake_up_process(arbp->snd_task);
@@ -152,32 +151,28 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "arb_qdisc_batch",
 	 .maxlen = sizeof(u32),
 	 .mode = 0644,
 	 .data = &pspat_arb_qdisc_batch,
 	 .proc_handler = &proc_dointvec,
-	 }
-	,
+	 },
 	{
 	 .procname = "dispatch_batch",
 	 .maxlen = sizeof(u32),
 	 .mode = 0644,
 	 .data = &pspat_dispatch_batch,
 	 .proc_handler = &proc_dointvec,
-	 }
-	,
+	 },
 	{
 	 .procname = "dispatch_sleep_us",
 	 .maxlen = sizeof(u32),
 	 .mode = 0644,
 	 .data = &pspat_dispatch_sleep_us,
 	 .proc_handler = &proc_dointvec,
-	 }
-	,
+	 },
 	{
 	 .procname = "rate",
 	 .maxlen = sizeof(u64),
@@ -186,8 +181,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongone,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "arb_tc_enq_drop",
 	 .maxlen = sizeof(u64),
@@ -196,8 +190,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "arb_backpressure_drop",
 	 .maxlen = sizeof(u64),
@@ -206,8 +199,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "arb_tc_deq",
 	 .maxlen = sizeof(u64),
@@ -216,8 +208,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "arb_dispatch_drop",
 	 .maxlen = sizeof(u64),
@@ -226,8 +217,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "dispatch_deq",
 	 .maxlen = sizeof(u64),
@@ -236,8 +226,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "arb_loop_avg_ns",
 	 .maxlen = sizeof(u64),
@@ -246,8 +235,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "arb_loop_max_ns",
 	 .maxlen = sizeof(u64),
@@ -256,8 +244,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "arb_loop_avg_reqs",
 	 .maxlen = sizeof(u64),
@@ -266,8 +253,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "mailbox_entries",
 	 .maxlen = sizeof(u64),
@@ -276,8 +262,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{
 	 .procname = "mailbox_line_size",
 	 .maxlen = sizeof(u64),
@@ -286,8 +271,7 @@ static struct ctl_table pspat_static_ctl[] = {
 	 .proc_handler = &proc_doulongvec_minmax,
 	 .extra1 = &pspat_ulongzero,
 	 .extra2 = &pspat_ulongmax,
-	 }
-	,
+	 },
 	{}
 };
 
