@@ -9,8 +9,8 @@
 
 #include "mailbox.h"
 
-struct pspat_mailbox *pspat_mb_new(const char *name, unsigned long entries,
-				   unsigned long line_size)
+struct pspat_mailbox *
+pspat_mb_new(const char *name, unsigned long entries, unsigned long line_size)
 {
 	struct pspat_mailbox *m;
 	int err;
@@ -29,7 +29,7 @@ struct pspat_mailbox *pspat_mb_new(const char *name, unsigned long entries,
 }
 
 int pspat_mb_init(struct pspat_mailbox *m, const char *name,
-		  unsigned long entries, unsigned long line_size)
+			unsigned long entries, unsigned long line_size)
 {
 	unsigned long entries_per_line;
 
@@ -49,10 +49,9 @@ int pspat_mb_init(struct pspat_mailbox *m, const char *name,
 	m->seqbit_shift = ilog2(entries);
 
 #ifdef PSPAT_MB_DEBUG
-	printk
-	    ("PSPAT: mb %p %s: line_entries %lu line_mask %lx entry_mask %lx seqbit_shift %lu\n",
-	     m, m->name, m->line_entries, m->line_mask, m->entry_mask,
-	     m->seqbit_shift);
+	printk(KERN_DEBUG
+	"PSPAT: mb %p %s: line_entries %lu line_mask %lx entry_mask %lx seqbit_shift %lu\n",
+	m, m->name, m->line_entries, m->line_mask, m->entry_mask, m->seqbit_shift);
 #endif
 
 	m->cons_clear = 0;
@@ -68,13 +67,13 @@ int pspat_mb_init(struct pspat_mailbox *m, const char *name,
 void pspat_mb_delete(struct pspat_mailbox *m)
 {
 #ifdef PSPAT_MB_DEBUG
-	printk("PSPAT: deleting mb %s\n", m->name);
+	printk(KERN_DEBUG "PSPAT: deleting mb %s\n", m->name);
 #endif
 	kfree(m);
 }
 
 void pspat_mb_dump_state(struct pspat_mailbox *m)
 {
-	printk("%s: cc %lu, cr %lu, pw %lu, pc %lu\n", m->name, m->cons_clear,
-	       m->cons_read, m->prod_write, m->prod_check);
+	printk(KERN_DEBUG "%s: cc %lu, cr %lu, pw %lu, pc %lu\n", m->name,
+	m->cons_clear, m->cons_read, m->prod_write, m->prod_check);
 }

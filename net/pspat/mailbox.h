@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0+
+/* SPDX-License-Identifier: GPL-2.0+ */
 
 #ifndef __PSPAT_MAILBOX_H
 #define __PSPAT_MAILBOX_H
@@ -63,7 +63,7 @@ static inline size_t pspat_mb_size(unsigned long entries)
  * Returned pointer must be checked with IS_ERR().
  */
 struct pspat_mailbox *pspat_mb_new(const char *name, unsigned long entries,
-				   unsigned long line_size);
+					unsigned long line_size);
 
 /**
  * pspat_mb_init - initialize a pre-allocated mailbox
@@ -76,7 +76,7 @@ struct pspat_mailbox *pspat_mb_new(const char *name, unsigned long entries,
  * Returns 0 on success, -errno on failure.
  */
 int pspat_mb_init(struct pspat_mailbox *m, const char *name,
-		  unsigned long entries, unsigned long line_size);
+			unsigned long entries, unsigned long line_size);
 
 /**
  * pspat_mb_delete - delete a mailbox
@@ -118,7 +118,7 @@ static inline int pspat_mb_insert(struct pspat_mailbox *m, void *v)
  * __pspat_mb_empty - used by pspat_mb_empty to test for an empty mailbox
  */
 static inline int __pspat_mb_empty(struct pspat_mailbox *m, unsigned long i,
-				   uintptr_t v)
+					uintptr_t v)
 {
 	return (!v) || ((v ^ (i >> m->seqbit_shift)) & 0x1);
 }
@@ -139,7 +139,7 @@ static inline int pspat_mb_empty(struct pspat_mailbox *m)
 /**
  * pspat_mb_extract - extract a value
  * @m: the mailbox where to extract from
- * 
+ *
  * Returns the extracted value, NULL if the mailbox
  * is empty. It does not free up any entry, use
  * pspat_mb_clear/pspat_mb_cler_all for that
