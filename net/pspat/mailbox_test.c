@@ -15,7 +15,7 @@
 #define kfree(x) free(x)
 #define kmalloc(x, y) malloc((x))
 #define kzalloc(x, y) calloc(1, (x))
-#define START_NEW_CACHELINE __attribute__((aligned(64)))
+#define START_NEW_CACHELINE __aligned(size)
 struct list_head {
 };
 
