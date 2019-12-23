@@ -20,15 +20,15 @@ struct list_head {
 };
 
 /* The `const' in roundup() prevents gcc-3.3 from calling __divdi3 */
-#define roundup(x, y) (                 \
-{                           \
-    const typeof(y) __y = y;            \
-    (((x) + (__y - 1)) / __y) * __y;        \
-}                           \
+#define roundup(x, y) (				\
+{						\
+	const typeof(y) __y = y;		\
+	(((x) + (__y - 1)) / __y) * __y;	\
+}						\
 )
 #define INTERNODE_CACHE_BYTES   64
-#define likely(x)       __builtin_expect((x),1)
-#define unlikely(x)     __builtin_expect((x),0)
+#define likely(x)       __builtin_expect((x), 1)
+#define unlikely(x)     __builtin_expect((x), 0)
 #define prefetch(x) __builtin_prefetch((x))
 #define printk      printf
 #define INIT_LIST_HEAD(x)
@@ -42,6 +42,7 @@ int is_power_of_2(unsigned long n)
 static unsigned long ilog2(unsigned long x)
 {
 	int res = -1;
+
 	while (x) {
 		res++;
 		x = x >> 1;
@@ -70,7 +71,7 @@ static inline int IS_ERR(const void *ptr)
 
 #include "mailbox.c"
 
-typedef int (*testfunc_t) (struct pspat_mailbox * mb, unsigned entries);
+typedef int (*testfunc_t) (struct pspat_mailbox *mb, unsigned int entries);
 
 #define EXPECT_TRUE(x) assert(!!(x))
 #define EXPECT_FALSE(x) assert(!(x))
@@ -78,10 +79,11 @@ typedef int (*testfunc_t) (struct pspat_mailbox * mb, unsigned entries);
 #define EXPECT_FAIL(x)   assert((x) != 0)
 #define EXPECT_EQ(x, y) assert((x) == (y))
 
-static int mb_fill_limit(struct pspat_mailbox *mb, unsigned limit)
+static int mb_fill_limit(struct pspat_mailbox *mb, unsigned int limit)
 {
 	void *v = mb;
 	int n = 0;
+
 	while (n < limit && pspat_mb_insert(mb, /*value= */ v) == 0) {
 		n++;
 		v += 4;
@@ -94,9 +96,10 @@ static int mb_fill(struct pspat_mailbox *mb)
 	return mb_fill_limit(mb, ~0U);
 }
 
-static int mb_drain_limit(struct pspat_mailbox *mb, unsigned limit)
+static int mb_drain_limit(struct pspat_mailbox *mb, unsigned int limit)
 {
 	int n = 0;
+
 	while (n < limit && pspat_mb_extract(mb) != NULL) {
 		n++;
 	}
@@ -112,7 +115,7 @@ static int mb_drain(struct pspat_mailbox *mb)
  * Test function n. 1
  * Check if the mailbox is empty.
  */
-static int test1(struct pspat_mailbox *mb, unsigned entries)
+static int test1(struct pspat_mailbox *mb, unsigned int entries)
 {
 	EXPECT_TRUE(pspat_mb_empty(mb));
 	return 0;
@@ -122,7 +125,7 @@ static int test1(struct pspat_mailbox *mb, unsigned entries)
  * Test function n. 2
  * Insert into an empty mailbox.
  */
-static int test2(struct pspat_mailbox *mb, unsigned entries)
+static int test2(struct pspat_mailbox *mb, unsigned int entries)
 {
 	EXPECT_TRUE(pspat_mb_empty(mb));
 	EXPECT_OK(pspat_mb_insert(mb, /*value= */ mb + 1));
@@ -135,7 +138,7 @@ static int test2(struct pspat_mailbox *mb, unsigned entries)
  * Insert into an empty mailbox, extract and check it is
  * now empty.
  */
-static int test3(struct pspat_mailbox *mb, unsigned entries)
+static int test3(struct pspat_mailbox *mb, unsigned int entries)
 {
 	void *v;
 
@@ -152,7 +155,7 @@ static int test3(struct pspat_mailbox *mb, unsigned entries)
  * Check we can fill the mb completely, and after
  * that we cannot insert anymore.
  */
-static int test4(struct pspat_mailbox *mb, unsigned entries)
+static int test4(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int n = mb_fill(mb);
 	EXPECT_EQ(n, entries - mb->line_entries);
@@ -167,7 +170,7 @@ static int test4(struct pspat_mailbox *mb, unsigned entries)
  * Fill in and drain, checking that we got back everything
  * we had inserted.
  */
-static int test5(struct pspat_mailbox *mb, unsigned entries)
+static int test5(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int n = mb_fill(mb);
@@ -183,7 +186,7 @@ static int test5(struct pspat_mailbox *mb, unsigned entries)
  * Fill, drain, and check that we cannot insert anymore
  * without clearing.
  */
-static int test6(struct pspat_mailbox *mb, unsigned entries)
+static int test6(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int n = mb_fill(mb);
@@ -198,7 +201,7 @@ static int test6(struct pspat_mailbox *mb, unsigned entries)
  * Test function n. 7
  * Fill, drain and clear. Then check that we can fill again.
  */
-static int test7(struct pspat_mailbox *mb, unsigned entries)
+static int test7(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int n = mb_fill(mb);
@@ -217,7 +220,7 @@ static int test7(struct pspat_mailbox *mb, unsigned entries)
  * Fill, drain and clear many times. Always fill/drain until
  * running out of resources.
  */
-static int test8(struct pspat_mailbox *mb, unsigned entries)
+static int test8(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int arbitrary_num_cycles = entries / 3;
@@ -238,7 +241,7 @@ static int test8(struct pspat_mailbox *mb, unsigned entries)
  * Test function n. 9
  * Mixed operations.
  */
-static int test9(struct pspat_mailbox *mb, unsigned entries)
+static int test9(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int n;
@@ -267,7 +270,7 @@ static int test9(struct pspat_mailbox *mb, unsigned entries)
  * Slowly fill the mailbox alternating insertion and extractions.
  * Check that we get the expected number of iterations.
  */
-static int test10(struct pspat_mailbox *mb, unsigned entries)
+static int test10(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int arbitrary_inc = 5 * maxn / 43;
@@ -303,7 +306,7 @@ static int test10(struct pspat_mailbox *mb, unsigned entries)
  * Insert and extract items one at a time, so many times to
  * use the ring multiple times.
  */
-static int test11(struct pspat_mailbox *mb, unsigned entries)
+static int test11(struct pspat_mailbox *mb, unsigned int entries)
 {
 	int maxn = entries - mb->line_entries;
 	int arbitrary_num_cycles = maxn * 17;
@@ -339,8 +342,8 @@ static testfunc_t tests[] = { test1, test2, test3, test4, test5, test6,
  */
 int main()
 {
-	const unsigned entries = 512;
-	const unsigned line_size = 128;
+	const unsigned int entries = 512;
+	const unsigned int line_size = 128;
 	int i;
 
 	// loop through available test functions
