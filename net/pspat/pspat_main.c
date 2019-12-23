@@ -306,15 +306,14 @@ static int pspat_sysctl_init(void)
 
 	pspat_stats = (struct pspat_stats *)get_zeroed_page(GFP_KERNEL);	// XXX max 4096/32 cpus
 	if (pspat_stats == NULL) {
-		printk(KERN_WARNING "pspat: unable to allocate stats page");
+		pr_warn("pspat: unable to allocate stats page");
 		goto out;
 	}
 
 	size = (cpus + 1) * sizeof(u64);
 	pspat_rounds = kzalloc(size, GFP_KERNEL);
 	if (pspat_rounds == NULL) {
-		printk(KERN_WARNING
-		       "pspat: unable to allocate rounds counter array\n");
+		pr_warn("pspat: unable to allocate rounds counter array\n");
 		goto free_stats;
 	}
 	pspat_static_ctl[1].data = pspat_rounds;
@@ -324,7 +323,7 @@ static int pspat_sysctl_init(void)
 	    size = extra_size + sizeof(struct ctl_table) * (cpus + 1);
 	buf = kzalloc(size, GFP_KERNEL);
 	if (buf == NULL) {
-		printk(KERN_WARNING "pspat: unable to allocate sysctls");
+		pr_warn("pspat: unable to allocate sysctls");
 		goto free_rounds;
 	}
 	name = buf;
@@ -335,8 +334,7 @@ static int pspat_sysctl_init(void)
 
 		n = snprintf(name, extra_size, "inq-drop-%d", i);
 		if (n >= extra_size) {	/* truncated */
-			printk(KERN_WARNING
-			       "pspat: not enough space for per-cpu sysctl names");
+			pr_warn("pspat: not enough space for per-cpu sysctl names");
 			goto free_leaves;
 		}
 		t->procname = name;
