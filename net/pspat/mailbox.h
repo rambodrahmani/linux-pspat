@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0+
+
 #ifndef __PSPAT_MAILBOX_H
 #define __PSPAT_MAILBOX_H
 

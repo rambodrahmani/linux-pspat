@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0+
+
 #ifndef __PSPAT_H__
 #define __PSPAT_H__
 
