@@ -340,7 +340,7 @@ static testfunc_t tests[] = { test1, test2, test3, test4, test5, test6,
 /**
  * Developer harness test.
  */
-int main()
+int main( int argc, const char* argv[] )
 {
 	const unsigned int entries = 512;
 	const unsigned int line_size = 128;
